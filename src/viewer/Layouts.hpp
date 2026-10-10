@@ -34,6 +34,15 @@ const std::vector<Layout> &allLayouts();
 // Returns the layout with this id, or the default (ATEM) layout.
 const Layout &layoutById(const std::string &id);
 
+// "Auto": Preview + Program large on top, then every scene below, sized so all
+// of them fit (4 to 12 per row, last row centred).
+Layout makeAutoLayout(int sceneCount);
+
+// The layout as drawn: resolves "auto" for the current number of scenes.
+Layout resolveLayout(const Layout &layout, int sceneCount);
+
+constexpr const char *kAutoLayoutId = "auto";
+
 constexpr const char *kDefaultLayoutId = "atem";
 
 } // namespace obsviewer

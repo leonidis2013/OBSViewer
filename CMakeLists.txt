@@ -80,6 +80,8 @@ target_sources(
     src/ui/Theme.hpp
     src/ui/ViewerDisplay.cpp
     src/ui/ViewerDisplay.hpp
+    src/ui/ViewerToolbar.cpp
+    src/ui/ViewerToolbar.hpp
     src/ui/ViewerDock.cpp
     src/ui/ViewerDock.hpp
     src/ui/FullscreenWindow.cpp

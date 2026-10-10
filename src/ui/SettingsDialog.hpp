@@ -31,7 +31,9 @@ private:
 
 	QComboBox *loudnessPreset_ = nullptr;
 	QDoubleSpinBox *customTarget_ = nullptr;
-	QComboBox *audioTrack_ = nullptr;
+	QComboBox *meterTrack_ = nullptr;
+	QComboBox *clickAction_ = nullptr;
+	QCheckBox *fullscreenToolbar_ = nullptr;
 
 	QCheckBox *autoCheck_ = nullptr;
 	QCheckBox *prereleases_ = nullptr;

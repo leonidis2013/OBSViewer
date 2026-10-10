@@ -64,6 +64,13 @@ public:
 	void removeView();
 	void setShowLabels(bool show);
 	void setShowTileMeters(bool show);
+
+	// Main-thread lookups for clicks and menus.
+	int sceneCount() const { return static_cast<int>(sceneWeak_.size()); }
+	std::string sceneName(int index) const;
+	obs_source_t *sceneAt(int index) const; // strong ref (release it) or nullptr
+	uint32_t canvasWidth() const { return labelHeight_ ? baseWidthMain_ : 1920; }
+	uint32_t canvasHeight() const { return labelHeight_ ? labelHeight_ : 1080; }
 	// Drop every reference; called when OBS exits or a scene collection unloads.
 	void clear();
 
@@ -111,6 +118,7 @@ private:
 	std::string previewName_;
 	bool haveProgramNames_ = false;
 	uint32_t labelHeight_ = 0; // canvas height the labels were built for
+	uint32_t baseWidthMain_ = 1920;
 	int views_ = 0;
 	bool showing_ = false;
 	std::vector<obs_weak_source_t *> shown_; // scenes we called inc_showing on

@@ -13,7 +13,8 @@ class Section;
 class StateButton;
 class AudioMeterWidget;
 
-// Right-hand bar: overall health light (click to expand every check), stream and
+// Right-hand bar: overall health light and performance light (click either to
+// expand every check), stream and
 // record start/stop with status, and the programme loudness meter.
 class SidePanel : public QWidget {
 public:
@@ -26,7 +27,7 @@ protected:
 
 private:
 	void refresh();
-	void toggleDetails();
+	void showPage(int page); // 0 controls, 1 health, 2 performance
 	void onStreamClicked();
 	void onRecordClicked();
 
@@ -36,6 +37,7 @@ private:
 	qint64 recordPendingUntil_ = 0;
 
 	HealthButton *health_ = nullptr;
+	HealthButton *perf_ = nullptr;
 	QStackedWidget *stack_ = nullptr;
 	Section *streamSection_ = nullptr;
 	Section *recordSection_ = nullptr;
@@ -44,6 +46,7 @@ private:
 	StateButton *recordButton_ = nullptr;
 	AudioMeterWidget *meter_ = nullptr;
 	HealthList *details_ = nullptr;
+	HealthList *perfDetails_ = nullptr;
 	QTimer *blinkTimer_ = nullptr;
 };
 

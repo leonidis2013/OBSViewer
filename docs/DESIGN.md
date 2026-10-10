@@ -199,6 +199,27 @@ attention"). Loudness simply drifting off target is shown but doesn't flash.
 - One OBS volume meter per audio source, shared by all tiles; created and removed as
   scenes change.
 
+
+### Control and performance (0.4.0)
+
+- **Toolbar** in the dock and the fullscreen window: layout, tile-click action
+  (Off / To Preview / To Program), screens, Settings, Exit (fullscreen only). The
+  fullscreen toolbar can be hidden (right-click ▸ Show Toolbar, or Settings).
+- **Tile clicks:** single click on a scene tile sends it to Preview (Studio Mode) or
+  cuts it to Program, per the setting; outside Studio Mode both switch the scene.
+  Double-click the Preview tile = transition to Program. Default: To Preview.
+- **Right-click menu:** Layout, Send to Preview / Cut to Program (or Switch Scene),
+  Clicking a Tile, screens, Show Toolbar, Settings, Exit Fullscreen.
+- **Auto layout:** Preview + Program on top (half width each), every scene below,
+  4–12 per row (fewest columns that fit the lower half), short rows centred.
+- **Program / Preview tiles** have no tally box (labels say which is which).
+- **Performance button:** Frame rate (warn < 97 %, problem < 90 % of target),
+  Render time (warn ≥ 60 %, problem ≥ 90 % of the frame budget), Rendering
+  missed frames, Encoding skipped frames, Stream / Record encoder description,
+  CPU, Memory.
+- **Meter track:** follows the stream's audio encoder (or the profile's stream track)
+  unless a track is picked manually.
+
 ## 5. Settings
 
 Stored as JSON in `~/Library/Application Support/obs-studio/plugin_config/obsviewer/config.json`.
@@ -209,13 +230,14 @@ Stored as JSON in `~/Library/Application Support/obs-studio/plugin_config/obsvie
 | `window_layout` | `atem` | Layout shown in the fullscreen window. |
 | `window_screen` | primary | Screen name for the fullscreen window. |
 | `show_labels` | `true` | Draw tile labels. |
-| `click_to_switch` | `false` | Tile click actions (stage 4). |
+| `click_action` | `1` | Tile click: 0 off, 1 to Preview, 2 to Program. |
+| `fullscreen_toolbar` | `true` | Toolbar in the fullscreen view. |
 | `show_sidebar` | `true` | Right-hand side bar. |
 | `show_netbar` | `true` | Bottom network bar. |
 | `alarms` | `true` | Flash sections that need attention. |
 | `loudness_preset` | `0` (YouTube −14) | Loudness target preset. |
 | `custom_target_lufs` | `-16` | Target when the preset is Custom. |
-| `audio_track` | `1` | OBS mix track the meter measures. |
+| `meter_track` | `0` | 0 = follow the stream track, else Track 1–6. |
 | `tile_meters` | `true` | Audio meters on each tile. |
 | `update_auto_check` | `true` | Check for updates when OBS starts (at most once every 12 h). |
 | `update_repo` | `leonidis2013/OBSViewer` | GitHub repository releases come from. |

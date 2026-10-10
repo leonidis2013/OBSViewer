@@ -7,6 +7,7 @@
 #include "ui/SettingsDialog.hpp"
 #include "ui/ViewerDock.hpp"
 #include "update/Updater.hpp"
+#include "viewer/Layouts.hpp"
 #include "viewer/ViewerState.hpp"
 
 #include <plugin-support.h>
@@ -215,17 +216,58 @@ void App::closeFullscreen()
 	}
 }
 
-void App::openSettings()
+void App::openSettings(QWidget *parent)
 {
 	obs_log(LOG_INFO, "settings: opening");
+	if (!parent)
+		parent = static_cast<QWidget *>(obs_frontend_get_main_window());
+	// A dialog belongs to its parent's window / fullscreen Space on macOS, so
+	// reopen it on the window that asked if that changed.
+	if (settings_ && settings_->parentWidget() != parent) {
+		settings_->close();
+		settings_ = nullptr;
+	}
 	if (!settings_) {
-		settings_ = new SettingsDialog(static_cast<QWidget *>(obs_frontend_get_main_window()));
+		settings_ = new SettingsDialog(parent);
 		settings_->setAttribute(Qt::WA_DeleteOnClose);
 	}
 	settings_->show();
 	settings_->raise();
 	settings_->activateWindow();
 	obs_log(LOG_INFO, "settings: visible=%d", settings_->isVisible());
+}
+
+void App::switchScene(int sceneIndex, int action)
+{
+	obs_source_t *scene = ViewerState::get().sceneAt(sceneIndex);
+	if (!scene)
+		return;
+	const bool studio = obs_frontend_preview_program_mode_active();
+	if (action == Settings::ClickPreview && studio) {
+		obs_log(LOG_INFO, "scene: '%s' to preview", obs_source_get_name(scene));
+		obs_frontend_set_current_preview_scene(scene);
+	} else if (action == Settings::ClickPreview || action == Settings::ClickProgram) {
+		// Outside Studio Mode there is no preview, so either action switches the scene.
+		obs_log(LOG_INFO, "scene: '%s' to program", obs_source_get_name(scene));
+		obs_frontend_set_current_scene(scene);
+	}
+	obs_source_release(scene);
+	ViewerState::get().refresh();
+}
+
+void App::handleTileClick(int kind, int sceneIndex, bool doubleClick)
+{
+	const int action = Settings::get().clickAction;
+	if (action == Settings::ClickOff)
+		return;
+	const auto tile = static_cast<TileKind>(kind);
+	if (tile == TileKind::Scene && !doubleClick) {
+		switchScene(sceneIndex, action);
+	} else if (tile == TileKind::Preview && doubleClick && obs_frontend_preview_program_mode_active()) {
+		// Double-click Preview = take it to Program with the current transition.
+		obs_log(LOG_INFO, "scene: transition preview to program");
+		obs_frontend_preview_program_trigger_transition();
+	}
 }
 
 void App::checkForUpdates(bool interactive)

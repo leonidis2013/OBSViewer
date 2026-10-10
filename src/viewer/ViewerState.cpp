@@ -304,6 +304,7 @@ void ViewerState::refresh()
 	previewName_ = previewName;
 	haveProgramNames_ = true;
 	labelHeight_ = height;
+	baseWidthMain_ = width;
 
 	releaseAll(oldSources);
 	releaseAll(oldWeak);
@@ -326,6 +327,19 @@ void ViewerState::removeView()
 {
 	if (views_ > 0 && --views_ == 0)
 		applyShowing(false);
+}
+
+std::string ViewerState::sceneName(int index) const
+{
+	return index >= 0 && static_cast<size_t>(index) < sceneNames_.size() ? sceneNames_[static_cast<size_t>(index)]
+									  : std::string();
+}
+
+obs_source_t *ViewerState::sceneAt(int index) const
+{
+	if (index < 0 || static_cast<size_t>(index) >= sceneWeak_.size())
+		return nullptr;
+	return obs_weak_source_get_source(sceneWeak_[static_cast<size_t>(index)]);
 }
 
 void ViewerState::setShowTileMeters(bool show)

@@ -11,8 +11,9 @@ namespace obsviewer {
 
 class MultiviewPanel;
 class ViewerDisplay;
+class ViewerToolbar;
 
-// Fullscreen multiview on a chosen screen. Esc or double-click closes it.
+// Fullscreen multiview on a chosen screen, with a toolbar on top. Esc closes it.
 class FullscreenWindow : public QWidget {
 	Q_OBJECT
 
@@ -28,7 +29,9 @@ protected:
 
 private:
 	void showContextMenu(const QPoint &globalPos);
+	void pickLayout(const std::string &id);
 
+	ViewerToolbar *toolbar_ = nullptr;
 	MultiviewPanel *panel_ = nullptr;
 	ViewerDisplay *display_ = nullptr;
 };

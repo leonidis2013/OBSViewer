@@ -68,6 +68,15 @@ SettingsDialog::SettingsDialog(QWidget *parent) : QDialog(parent)
 	viewForm->addRow(QString(), alarms_);
 	tileMeters_ = new QCheckBox(tr("Show audio meters on tiles"), viewGroup);
 	viewForm->addRow(QString(), tileMeters_);
+	fullscreenToolbar_ = new QCheckBox(tr("Show the toolbar in fullscreen"), viewGroup);
+	viewForm->addRow(QString(), fullscreenToolbar_);
+	clickAction_ = new QComboBox(viewGroup);
+	clickAction_->addItem(tr("Does nothing"), Settings::ClickOff);
+	clickAction_->addItem(tr("Sends the scene to Preview"), Settings::ClickPreview);
+	clickAction_->addItem(tr("Cuts the scene to Program"), Settings::ClickProgram);
+	clickAction_->setToolTip(tr("Outside Studio Mode both choices switch the scene. "
+				    "Double-click the Preview tile to take it to Program."));
+	viewForm->addRow(tr("Clicking a tile"), clickAction_);
 
 	// ---- Audio ----
 	auto *audioGroup = new QGroupBox(tr("AUDIO"), this);
@@ -87,17 +96,18 @@ SettingsDialog::SettingsDialog(QWidget *parent) : QDialog(parent)
 	customTarget_->setSingleStep(0.5);
 	customTarget_->setDecimals(1);
 	customTarget_->setSuffix(QStringLiteral(" LUFS"));
-	audioTrack_ = new QComboBox(audioGroup);
+	meterTrack_ = new QComboBox(audioGroup);
+	meterTrack_->addItem(tr("Stream output (automatic)"), 0);
 	for (int t = 1; t <= 6; ++t)
-		audioTrack_->addItem(tr("Track %1").arg(t), t);
-	auto *audioHelp = new QLabel(tr("The meter measures this OBS audio track. Use the track your stream sends "
-					"(Settings ▸ Output ▸ Streaming ▸ Audio Track; Track 1 by default)."),
+		meterTrack_->addItem(tr("Track %1").arg(t), t);
+	auto *audioHelp = new QLabel(tr("The meter only listens; it never changes your audio. \"Stream output\" "
+					"measures exactly the track your stream sends."),
 				     audioGroup);
 	audioHelp->setWordWrap(true);
 	audioHelp->setProperty("dim", true);
 	audioForm->addRow(tr("Loudness target"), loudnessPreset_);
 	audioForm->addRow(tr("Custom target"), customTarget_);
-	audioForm->addRow(tr("Measure"), audioTrack_);
+	audioForm->addRow(tr("Measure"), meterTrack_);
 	audioForm->addRow(QString(), audioHelp);
 	connect(loudnessPreset_, &QComboBox::currentIndexChanged, this,
 		[this](int index) { customTarget_->setEnabled(index == bm::kCustomPresetIndex); });
@@ -184,7 +194,9 @@ void SettingsDialog::load()
 	loudnessPreset_->setCurrentIndex(std::clamp(s.loudnessPreset, 0, bm::kNumLoudnessPresets - 1));
 	customTarget_->setValue(s.customTargetLufs);
 	customTarget_->setEnabled(loudnessPreset_->currentIndex() == bm::kCustomPresetIndex);
-	audioTrack_->setCurrentIndex(std::clamp(s.audioTrack, 1, 6) - 1);
+	meterTrack_->setCurrentIndex(std::clamp(s.meterTrack, 0, 6));
+	clickAction_->setCurrentIndex(std::max(0, clickAction_->findData(s.clickAction)));
+	fullscreenToolbar_->setChecked(s.fullscreenToolbar);
 	autoCheck_->setChecked(s.updateAutoCheck);
 	prereleases_->setChecked(s.updateIncludePrereleases);
 	repo_->setText(QString::fromStdString(s.updateRepo));
@@ -210,7 +222,9 @@ void SettingsDialog::apply()
 	s.tileMeters = tileMeters_->isChecked();
 	s.loudnessPreset = loudnessPreset_->currentIndex();
 	s.customTargetLufs = static_cast<float>(customTarget_->value());
-	s.audioTrack = audioTrack_->currentData().toInt();
+	s.meterTrack = meterTrack_->currentData().toInt();
+	s.clickAction = clickAction_->currentData().toInt();
+	s.fullscreenToolbar = fullscreenToolbar_->isChecked();
 	s.updateAutoCheck = autoCheck_->isChecked();
 	s.updateIncludePrereleases = prereleases_->isChecked();
 

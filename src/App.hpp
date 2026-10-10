@@ -6,6 +6,7 @@
 #include <obs-frontend-api.h>
 
 class QMenu;
+class QWidget;
 class QScreen;
 class QTimer;
 
@@ -29,7 +30,12 @@ public:
 	void openFullscreen(QScreen *screen);
 	void closeFullscreen();
 	bool fullscreenOpen() const;
-	void openSettings();
+	// parent: the window asking (so the dialog opens on top of fullscreen), or null for OBS.
+	void openSettings(QWidget *parent = nullptr);
+	// action: Settings::ClickPreview or Settings::ClickProgram.
+	void switchScene(int sceneIndex, int action);
+	// A tile in a multiview was clicked (kind = TileKind as int).
+	void handleTileClick(int kind, int sceneIndex, bool doubleClick);
 	void checkForUpdates(bool interactive);
 
 	// Called after settings change so every view picks up new values.

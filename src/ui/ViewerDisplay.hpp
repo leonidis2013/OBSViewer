@@ -26,7 +26,9 @@ public:
 	QPaintEngine *paintEngine() const override { return nullptr; }
 
 signals:
-	void doubleClicked();
+	// kind: TileKind as int; sceneIndex for scene tiles, else -1
+	void tileClicked(int kind, int sceneIndex);
+	void tileDoubleClicked(int kind, int sceneIndex);
 	void contextMenuRequested(const QPoint &globalPos);
 
 protected:
@@ -34,12 +36,14 @@ protected:
 	void resizeEvent(QResizeEvent *event) override;
 	void showEvent(QShowEvent *event) override;
 	void hideEvent(QHideEvent *event) override;
+	void mousePressEvent(QMouseEvent *event) override;
 	void mouseDoubleClickEvent(QMouseEvent *event) override;
 	void contextMenuEvent(QContextMenuEvent *event) override;
 
 private:
 	void createDisplay();
 	void destroyDisplay();
+	bool tileAt(const QPointF &pos, int &kind, int &sceneIndex) const;
 	QSize pixelSize() const;
 	static void draw(void *param, uint32_t cx, uint32_t cy);
 

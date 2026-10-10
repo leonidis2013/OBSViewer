@@ -20,6 +20,11 @@ void addScreenActions(QMenu *menu, const std::string &currentScreen, const std::
 // Human-readable screen description ("Built-in Retina Display — 1512 × 982 (main)").
 QString screenTitle(QScreen *screen);
 
+// The right-click menu for the dock and the fullscreen window. Every action runs
+// after the menu closes. `onLayout` is called with the picked layout id.
+void buildViewerMenu(QMenu &menu, const std::string &layoutId, const std::function<void(const std::string &)> &onLayout,
+		     bool fullscreen);
+
 // A long-lived "pick a screen" menu for the Tools menu and the dock toolbar.
 // On macOS, adding or deleting items while a native menu is opening makes clicks
 // get lost, so this menu rebuilds only when screens are added or removed, never

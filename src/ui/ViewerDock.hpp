@@ -4,15 +4,13 @@
 
 #include <string>
 
-class QComboBox;
-class QToolButton;
-
 namespace obsviewer {
 
 class MultiviewPanel;
 class ViewerDisplay;
+class ViewerToolbar;
 
-// Contents of the "OBSViewer" dock: a slim toolbar above a multiview display.
+// Contents of the "OBSViewer" dock: a slim toolbar above the multiview panel.
 class ViewerDock : public QWidget {
 	Q_OBJECT
 
@@ -23,14 +21,12 @@ public:
 	void applySettings();
 
 private:
-	void onLayoutPicked(int index);
+	void pickLayout(const std::string &id);
 	void showContextMenu(const QPoint &globalPos);
 
+	ViewerToolbar *toolbar_ = nullptr;
 	MultiviewPanel *panel_ = nullptr;
 	ViewerDisplay *display_ = nullptr;
-	QComboBox *layoutBox_ = nullptr;
-	QToolButton *fullscreenButton_ = nullptr;
-	QToolButton *settingsButton_ = nullptr;
 };
 
 } // namespace obsviewer

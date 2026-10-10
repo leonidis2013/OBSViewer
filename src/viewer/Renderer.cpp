@@ -212,14 +212,54 @@ void drawTileMeter(const levels::TileLevels &t, const Rect &pic, float px, float
 	}
 }
 
+Frame computeFrame(const NRect &b, float fw, float fh, float cx, float cy)
+{
+	Frame f;
+	f.fw = fw;
+	f.fh = fh;
+	const float areaW = fw * b.w, areaH = fh * b.h;
+	if (cx / cy > areaW / areaH) {
+		f.scale = cy / areaH;
+		f.ox = (cx - areaW * f.scale) / 2;
+	} else {
+		f.scale = cx / areaW;
+		f.oy = (cy - areaH * f.scale) / 2;
+	}
+	return f;
+}
+
 } // namespace
 
-void Renderer::render(const Layout &layout, uint32_t cx, uint32_t cy)
+TileHit Renderer::hitTest(const Layout &layout, uint32_t baseWidth, uint32_t baseHeight, double w, double h, double x,
+			  double y)
+{
+	TileHit hit;
+	if (w <= 0 || h <= 0 || baseWidth == 0 || baseHeight == 0)
+		return hit;
+	const Frame f = computeFrame(layout.bounds(), static_cast<float>(baseWidth), static_cast<float>(baseHeight),
+				     static_cast<float>(w), static_cast<float>(h));
+	const float cxp = (static_cast<float>(x) - f.ox) / f.scale;
+	const float cyp = (static_cast<float>(y) - f.oy) / f.scale;
+	for (size_t i = 0; i < layout.tiles.size(); ++i) {
+		const Tile &t = layout.tiles[i];
+		const float tx = t.rect.x * f.fw, ty = t.rect.y * f.fh, tw = t.rect.w * f.fw, th = t.rect.h * f.fh;
+		if (cxp >= tx && cxp < tx + tw && cyp >= ty && cyp < ty + th) {
+			hit.tile = static_cast<int>(i);
+			hit.kind = t.kind;
+			hit.sceneIndex = t.sceneIndex;
+			break;
+		}
+	}
+	return hit;
+}
+
+void Renderer::render(const Layout &requested, uint32_t cx, uint32_t cy)
 {
 	if (cx == 0 || cy == 0)
 		return;
 
 	ViewerState::Snapshot snap = ViewerState::get().acquire();
+	const Layout layout = resolveLayout(requested, static_cast<int>(snap.scenes.size()));
 
 	Frame f;
 	f.fw = static_cast<float>(snap.baseWidth);
@@ -229,14 +269,7 @@ void Renderer::render(const Layout &layout, uint32_t cx, uint32_t cy)
 	// Fit the area the tiles cover (not the whole canvas) into the window.
 	const NRect b = layout.bounds();
 	const float areaW = f.fw * b.w, areaH = f.fh * b.h;
-	const float windowAspect = static_cast<float>(cx) / static_cast<float>(cy);
-	if (windowAspect > areaW / areaH) {
-		f.scale = static_cast<float>(cy) / areaH;
-		f.ox = (static_cast<float>(cx) - areaW * f.scale) / 2;
-	} else {
-		f.scale = static_cast<float>(cx) / areaW;
-		f.oy = (static_cast<float>(cy) - areaH * f.scale) / 2;
-	}
+	f = computeFrame(b, f.fw, f.fh, static_cast<float>(cx), static_cast<float>(cy));
 
 	// Line weights in window pixels, converted to canvas units.
 	const float px = 1.0f / f.scale;
@@ -268,17 +301,14 @@ void Renderer::render(const Layout &layout, uint32_t cx, uint32_t cy)
 
 		switch (tile.kind) {
 		case TileKind::Program:
+			// No coloured box: the label already says PROGRAM.
 			source = snap.program;
 			label = snap.programLabel;
-			edge = theme::kBad;
-			active = true;
 			isProgram = true;
 			break;
 		case TileKind::Preview:
 			source = snap.preview;
 			label = snap.previewLabel;
-			edge = snap.studioMode ? theme::kGood : theme::kBorder;
-			active = snap.studioMode;
 			previewFallback = !snap.studioMode;
 			break;
 		case TileKind::Scene:

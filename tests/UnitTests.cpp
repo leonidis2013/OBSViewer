@@ -84,6 +84,58 @@ static void testLayouts()
 	CHECK(layoutById("grid4").sceneTileCount() == 16);
 }
 
+static void checkLayoutGeometry(const Layout &l)
+{
+	for (size_t i = 0; i < l.tiles.size(); ++i) {
+		const NRect &a = l.tiles[i].rect;
+		CHECK(a.x >= -1e-4f && a.y >= -1e-4f && a.x + a.w <= 1.0f + 1e-4f && a.y + a.h <= 1.0f + 1e-4f);
+		for (size_t j = i + 1; j < l.tiles.size(); ++j) {
+			const NRect &b = l.tiles[j].rect;
+			const bool overlap = a.x < b.x + b.w - 1e-4f && b.x < a.x + a.w - 1e-4f && a.y < b.y + b.h - 1e-4f &&
+					     b.y < a.y + a.h - 1e-4f;
+			CHECK(!overlap);
+		}
+	}
+}
+
+static void testAutoLayout()
+{
+	CHECK(makeAutoLayout(0).tiles.size() == 2);
+	CHECK(makeAutoLayout(0).sceneTileCount() == 0);
+	for (int n : {1, 3, 4, 5, 8, 9, 10, 16, 17, 30, 50, 72}) {
+		const Layout l = makeAutoLayout(n);
+		CHECK(l.sceneTileCount() == n);
+		checkLayoutGeometry(l);
+		// scene tiles are never bigger than a quarter of the width
+		for (const auto &t : l.tiles)
+			if (t.kind == TileKind::Scene)
+				CHECK(t.rect.w <= 0.25f + 1e-4f);
+	}
+	// 4 scenes: one row of quarter-width tiles, like ATEM
+	{
+		const Layout l = makeAutoLayout(4);
+		CHECK(near(l.bounds().h, 0.75f));
+	}
+	// 10 scenes: 5 per row, two rows
+	{
+		const Layout l = makeAutoLayout(10);
+		CHECK(near(l.tiles[2].rect.w, 0.2f));
+		CHECK(near(l.bounds().h, 0.9f));
+	}
+	// 2 scenes: centred
+	{
+		const Layout l = makeAutoLayout(2);
+		CHECK(near(l.tiles[2].rect.x, 0.25f) && near(l.tiles[3].rect.x, 0.5f));
+	}
+	// more than fits: capped, never overflows
+	CHECK(makeAutoLayout(500).sceneTileCount() == 72);
+	checkLayoutGeometry(makeAutoLayout(500));
+
+	CHECK(resolveLayout(layoutById("auto"), 9).sceneTileCount() == 9);
+	CHECK(resolveLayout(layoutById("atem"), 9).sceneTileCount() == 4);
+	CHECK(layoutById("nope").id == "atem");
+}
+
 static void testVersions()
 {
 	const Version a = Version::parse("v0.1.0");
@@ -362,14 +414,51 @@ static void testLevelMath()
 	}
 }
 
+static void testPerformance()
+{
+	PerfInputs in;
+	in.fpsTarget = 30.0;
+	in.fpsActive = 30.0;
+	in.renderMs = 4.0;
+	in.cpuPct = 20.0;
+	in.memoryMB = 900.0;
+	HealthReport r = evaluatePerformance(in);
+	CHECK(r.overall == Level::Good);
+	CHECK(r.levelOf("Frame rate") == Level::Good);
+	CHECK(r.levelOf("Encoding") == Level::Off);
+	CHECK(r.levelOf("Stream encoder") == Level::Off);
+
+	in.fpsActive = 28.0; // 93%
+	CHECK(evaluatePerformance(in).levelOf("Frame rate") == Level::Warn);
+	in.fpsActive = 20.0;
+	CHECK(evaluatePerformance(in).levelOf("Frame rate") == Level::Bad);
+	in.fpsActive = 30.0;
+
+	in.renderMs = 25.0; // 75% of 33.3 ms
+	CHECK(evaluatePerformance(in).levelOf("Render time") == Level::Warn);
+	in.renderMs = 32.0;
+	CHECK(evaluatePerformance(in).levelOf("Render time") == Level::Bad);
+	in.renderMs = 4.0;
+
+	in.encoding = true;
+	in.encoderSkipPct = 6.0;
+	in.streamEncoder = "Apple VT H264 Hardware · 1920×1080 · 6000 kbps";
+	r = evaluatePerformance(in);
+	CHECK(r.levelOf("Encoding") == Level::Bad);
+	CHECK(r.levelOf("Stream encoder") == Level::Good);
+	CHECK(r.overall == Level::Bad);
+}
+
 int main()
 {
 	testLayouts();
+	testAutoLayout();
 	testVersions();
 	testSelection();
 	testChecksums();
 	testHistory();
 	testHealth();
+	testPerformance();
 	testLoudness();
 	testLevelMath();
 	std::printf("%d checks, %d failures\n", checks, failures);

@@ -6,21 +6,20 @@
 #include "ui/MultiviewPanel.hpp"
 #include "ui/Theme.hpp"
 #include "ui/ViewerDisplay.hpp"
+#include "ui/ViewerToolbar.hpp"
 
 #include <QAction>
 #include <QKeyEvent>
 #include <QMenu>
 #include <QPointer>
 #include <QScreen>
-#include <QTimer>
 #include <QVBoxLayout>
 #include <QWindow>
 
 namespace obsviewer {
 
 // Set up like OBS's own fullscreen projectors: a normal titled window that is
-// switched to fullscreen. macOS refuses to put a frameless (borderless) window
-// into fullscreen, which is why the first version never went fullscreen.
+// switched to fullscreen (macOS refuses to make a borderless window fullscreen).
 FullscreenWindow::FullscreenWindow(QWidget *parent) : QWidget(parent, Qt::Window)
 {
 	setObjectName(QStringLiteral("OBSViewerRoot"));
@@ -29,14 +28,21 @@ FullscreenWindow::FullscreenWindow(QWidget *parent) : QWidget(parent, Qt::Window
 	setAttribute(Qt::WA_QuitOnClose, false); // closing it must never quit OBS
 	setFocusPolicy(Qt::StrongFocus);
 
+	toolbar_ = new ViewerToolbar(true, [this](const std::string &id) { pickLayout(id); }, this);
+
 	panel_ = new MultiviewPanel(false, this);
 	display_ = panel_->display();
-	connect(display_, &ViewerDisplay::doubleClicked, this, &QWidget::close);
 	connect(display_, &ViewerDisplay::contextMenuRequested, this, &FullscreenWindow::showContextMenu);
+	connect(display_, &ViewerDisplay::tileClicked, this,
+		[](int kind, int scene) { App::get().handleTileClick(kind, scene, false); });
+	connect(display_, &ViewerDisplay::tileDoubleClicked, this,
+		[](int kind, int scene) { App::get().handleTileClick(kind, scene, true); });
 
 	auto *layout = new QVBoxLayout(this);
 	layout->setContentsMargins(0, 0, 0, 0);
-	layout->addWidget(panel_);
+	layout->setSpacing(0);
+	layout->addWidget(toolbar_);
+	layout->addWidget(panel_, 1);
 
 	// Esc closes, even when the native video view has keyboard focus.
 	auto *escape = new QAction(this);
@@ -44,16 +50,31 @@ FullscreenWindow::FullscreenWindow(QWidget *parent) : QWidget(parent, Qt::Window
 	escape->setShortcutContext(Qt::WindowShortcut);
 	addAction(escape);
 	connect(escape, &QAction::triggered, this, &QWidget::close);
+
+	applySettings();
 }
 
 void FullscreenWindow::setLayoutId(const std::string &id)
 {
 	display_->setLayoutId(id);
+	toolbar_->setLayoutId(id);
+}
+
+void FullscreenWindow::pickLayout(const std::string &id)
+{
+	setLayoutId(id);
+	Settings &s = Settings::get();
+	if (s.windowLayout != id) {
+		s.windowLayout = id;
+		s.save();
+	}
 }
 
 void FullscreenWindow::applySettings()
 {
 	panel_->applySettings();
+	toolbar_->syncFromSettings();
+	toolbar_->setVisible(Settings::get().fullscreenToolbar);
 }
 
 void FullscreenWindow::showOnScreen(QScreen *screen)
@@ -69,6 +90,7 @@ void FullscreenWindow::showOnScreen(QScreen *screen)
 	showFullScreen();
 	raise();
 	activateWindow();
+	setFocus();
 }
 
 void FullscreenWindow::keyPressEvent(QKeyEvent *event)
@@ -82,39 +104,16 @@ void FullscreenWindow::keyPressEvent(QKeyEvent *event)
 
 void FullscreenWindow::showContextMenu(const QPoint &globalPos)
 {
-	// Everything runs after the menu closes: some of these actions delete this
-	// window, and macOS ignores fullscreen changes made while a menu is open.
-	auto later = [](std::function<void()> fn) { QTimer::singleShot(0, &App::get(), std::move(fn)); };
-	QPointer<FullscreenWindow> self(this);
-
 	QMenu menu(this);
-
-	QMenu *layouts = menu.addMenu(tr("Layout"));
-	ui::addLayoutActions(layouts, display_->layoutId(), [self, later](const std::string &id) {
-		later([self, id] {
-			if (!self)
-				return;
-			self->display_->setLayoutId(id);
-			Settings &s = Settings::get();
-			s.windowLayout = id;
-			s.save();
-		});
-	});
-
-	QMenu *screens = menu.addMenu(tr("Move to Screen"));
-	ui::addScreenActions(screens, Settings::get().windowScreen, [later](QScreen *screen) {
-		QPointer<QScreen> guarded(screen);
-		later([guarded] {
-			if (guarded)
-				App::get().openFullscreen(guarded.data());
-		});
-	});
-
-	menu.addSeparator();
-	connect(menu.addAction(tr("Settings…")), &QAction::triggered, this,
-		[later] { later([] { App::get().openSettings(); }); });
-	connect(menu.addAction(tr("Close Fullscreen")), &QAction::triggered, this,
-		[later] { later([] { App::get().closeFullscreen(); }); });
+	menu.setStyleSheet(theme::styleSheet());
+	QPointer<FullscreenWindow> self(this);
+	ui::buildViewerMenu(
+		menu, display_->layoutId(),
+		[self](const std::string &id) {
+			if (self)
+				self->pickLayout(id);
+		},
+		true);
 	menu.exec(globalPos);
 }
 

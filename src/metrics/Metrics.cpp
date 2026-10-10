@@ -5,6 +5,7 @@
 
 #include <obs.h>
 #include <obs-frontend-api.h>
+#include <util/config-file.h>
 #include <util/platform.h>
 
 #include <plugin-support.h>
@@ -12,6 +13,8 @@
 #include <QTimer>
 
 #include <algorithm>
+#include <cstring>
+#include <string>
 
 namespace obsviewer {
 
@@ -34,7 +37,63 @@ const bm::LoudnessPreset &currentPreset()
 	return bm::kLoudnessPresets[index];
 }
 
+// "Apple VT H264 Hardware · 1920×1080 · 6000 kbps"
+std::string describeEncoder(obs_output_t *out)
+{
+	if (!out || !obs_output_active(out))
+		return {};
+	obs_encoder_t *enc = obs_output_get_video_encoder(out);
+	if (!enc)
+		return {};
+	std::string d;
+	const char *name = obs_encoder_get_display_name(obs_encoder_get_id(enc));
+	d = name ? name : obs_encoder_get_id(enc);
+	const uint32_t w = obs_encoder_get_width(enc), h = obs_encoder_get_height(enc);
+	if (w && h)
+		d += " · " + std::to_string(w) + "×" + std::to_string(h);
+	if (obs_data_t *settings = obs_encoder_get_settings(enc)) {
+		const long long kbps = obs_data_get_int(settings, "bitrate");
+		const char *rc = obs_data_get_string(settings, "rate_control");
+		if (kbps > 0 && (!rc || std::strcmp(rc, "CRF") != 0 && std::strcmp(rc, "CQP") != 0 &&
+					     std::strcmp(rc, "CQ") != 0))
+			d += " · " + std::to_string(kbps) + " kbps";
+		else if (rc && *rc)
+			d += std::string(" · ") + rc;
+		obs_data_release(settings);
+	}
+	return d;
+}
+
 } // namespace
+
+int Metrics::streamTrackIndex()
+{
+	// The stream's audio encoder knows exactly which mix it encodes.
+	if (obs_output_t *out = obs_frontend_get_streaming_output()) {
+		obs_encoder_t *aenc = obs_output_get_audio_encoder(out, 0);
+		const int idx = aenc ? static_cast<int>(obs_encoder_get_mixer_index(aenc)) : -1;
+		obs_output_release(out);
+		if (idx >= 0 && idx < MAX_AUDIO_MIXES)
+			return idx;
+	}
+	// Otherwise read the profile: Advanced output mode has a stream track setting;
+	// Simple mode always streams Track 1.
+	if (config_t *cfg = obs_frontend_get_profile_config()) {
+		const char *mode = config_get_string(cfg, "Output", "Mode");
+		if (mode && std::strcmp(mode, "Advanced") == 0) {
+			const int t = static_cast<int>(config_get_int(cfg, "AdvOut", "TrackIndex"));
+			if (t >= 1 && t <= MAX_AUDIO_MIXES)
+				return t - 1;
+		}
+	}
+	return 0;
+}
+
+size_t Metrics::meterTrackIndex() const
+{
+	const int manual = Settings::get().meterTrack;
+	return static_cast<size_t>(manual >= 1 && manual <= 6 ? manual - 1 : streamTrackIndex());
+}
 
 Metrics &Metrics::get()
 {
@@ -72,7 +131,7 @@ void Metrics::start()
 	}
 	if (!cpu_)
 		cpu_ = os_cpu_usage_info_start();
-	ProgramLoudness::get().start(static_cast<size_t>(std::clamp(Settings::get().audioTrack, 1, 6) - 1));
+	ProgramLoudness::get().start(meterTrackIndex());
 	lastSampleNs_ = os_gettime_ns();
 	timer_->start();
 }
@@ -99,8 +158,10 @@ void Metrics::sample()
 	const double dt = std::max(0.2, static_cast<double>(now - lastSampleNs_) / 1e9);
 	lastSampleNs_ = now;
 
-	// Keep measuring the track chosen in Settings.
-	ProgramLoudness::get().start(static_cast<size_t>(std::clamp(Settings::get().audioTrack, 1, 6) - 1));
+	// Keep measuring the stream's track (or the one chosen in Settings).
+	const size_t track = meterTrackIndex();
+	measuredTrack = static_cast<int>(track) + 1;
+	ProgramLoudness::get().start(track);
 
 	// ---------------- stream ----------------
 	BitrateSample bs;
@@ -219,6 +280,34 @@ void Metrics::sample()
 		silentSeconds += dt;
 	else
 		silentSeconds = 0.0;
+
+	// ---------------- performance ----------------
+	{
+		obs_video_info ovi = {};
+		if (obs_get_video_info(&ovi) && ovi.fps_den > 0)
+			perf.fpsTarget = static_cast<double>(ovi.fps_num) / ovi.fps_den;
+		perf.fpsActive = system.fps;
+		perf.renderMs = static_cast<double>(obs_get_average_frame_time_ns()) / 1e6;
+
+		PerfInputs pi;
+		pi.fpsTarget = perf.fpsTarget;
+		pi.fpsActive = perf.fpsActive;
+		pi.renderMs = perf.renderMs;
+		pi.renderLagPct = system.renderLagPct;
+		pi.encoderSkipPct = system.encoderSkipPct;
+		pi.encoding = stream.active || record.active;
+		pi.cpuPct = system.cpuPct;
+		pi.memoryMB = system.memoryMB;
+		if (obs_output_t *out = obs_frontend_get_streaming_output()) {
+			pi.streamEncoder = describeEncoder(out);
+			obs_output_release(out);
+		}
+		if (obs_output_t *rec = obs_frontend_get_recording_output()) {
+			pi.recordEncoder = describeEncoder(rec);
+			obs_output_release(rec);
+		}
+		performance = evaluatePerformance(pi);
+	}
 
 	// ---------------- health ----------------
 	HealthInputs in;

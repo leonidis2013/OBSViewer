@@ -169,4 +169,66 @@ HealthReport evaluateHealth(const HealthInputs &in)
 	return r;
 }
 
+HealthReport evaluatePerformance(const PerfInputs &in)
+{
+	HealthReport r;
+	auto add = [&r](const char *name, Level level, std::string detail) {
+		r.checks.push_back(HealthCheck{name, level, std::move(detail)});
+	};
+
+	// ---- frame rate ----
+	if (in.fpsTarget <= 0.0) {
+		add("Frame rate", Level::Off, "Unknown");
+	} else {
+		const double ratio = in.fpsActive / in.fpsTarget;
+		const Level l = ratio >= 0.97 ? Level::Good : ratio >= 0.90 ? Level::Warn : Level::Bad;
+		add("Frame rate", l, fmt2("%.2f of %.2f fps", in.fpsActive, in.fpsTarget));
+	}
+
+	// ---- render time ----
+	if (in.fpsTarget > 0.0) {
+		const double budget = 1000.0 / in.fpsTarget;
+		const double share = in.renderMs / budget;
+		const Level l = share < 0.6 ? Level::Good : share < 0.9 ? Level::Warn : Level::Bad;
+		add("Render time", l, fmt2("%.1f ms of %.1f ms per frame", in.renderMs, budget));
+	}
+
+	// ---- missed / skipped frames ----
+	{
+		const Level l = in.renderLagPct >= 5.0 ? Level::Bad : in.renderLagPct >= 1.0 ? Level::Warn : Level::Good;
+		add("Rendering", l,
+		    in.renderLagPct > 0.0 ? fmt("%.1f%% frames missed (GPU busy)", in.renderLagPct)
+					  : std::string("No missed frames"));
+	}
+	if (!in.encoding) {
+		add("Encoding", Level::Off, "Idle");
+	} else {
+		const Level l = in.encoderSkipPct >= 5.0 ? Level::Bad : in.encoderSkipPct >= 0.5 ? Level::Warn : Level::Good;
+		add("Encoding", l,
+		    in.encoderSkipPct > 0.0 ? fmt("%.1f%% frames skipped (encoder overloaded)", in.encoderSkipPct)
+					    : std::string("No skipped frames"));
+	}
+
+	// ---- encoders (information) ----
+	add("Stream encoder", in.streamEncoder.empty() ? Level::Off : Level::Good,
+	    in.streamEncoder.empty() ? std::string("Not streaming") : in.streamEncoder);
+	add("Record encoder", in.recordEncoder.empty() ? Level::Off : Level::Good,
+	    in.recordEncoder.empty() ? std::string("Not recording") : in.recordEncoder);
+
+	// ---- system ----
+	if (in.cpuPct < 0.0) {
+		add("CPU", Level::Off, "Unknown");
+	} else {
+		const Level l = in.cpuPct >= 90.0 ? Level::Bad : in.cpuPct >= 75.0 ? Level::Warn : Level::Good;
+		add("CPU", l, fmt("OBS using %.0f%%", in.cpuPct));
+	}
+	add("Memory", in.memoryMB > 0.0 ? Level::Good : Level::Off,
+	    in.memoryMB >= 1024.0 ? fmt("%.1f GB", in.memoryMB / 1024.0) : fmt("%.0f MB", in.memoryMB));
+
+	for (const auto &c : r.checks)
+		if (c.level > r.overall)
+			r.overall = c.level;
+	return r;
+}
+
 } // namespace obsviewer

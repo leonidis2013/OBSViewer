@@ -145,10 +145,32 @@ void ViewerDisplay::hideEvent(QHideEvent *event)
 	}
 }
 
+bool ViewerDisplay::tileAt(const QPointF &pos, int &kind, int &sceneIndex) const
+{
+	const ViewerState &state = ViewerState::get();
+	const Layout layout = resolveLayout(*layout_.load(), state.sceneCount());
+	const TileHit hit = Renderer::hitTest(layout, state.canvasWidth(), state.canvasHeight(), width(), height(),
+					      pos.x(), pos.y());
+	if (hit.tile < 0)
+		return false;
+	kind = static_cast<int>(hit.kind);
+	sceneIndex = hit.sceneIndex;
+	return true;
+}
+
+void ViewerDisplay::mousePressEvent(QMouseEvent *event)
+{
+	int kind = 0, scene = -1;
+	if (event->button() == Qt::LeftButton && tileAt(event->position(), kind, scene))
+		emit tileClicked(kind, scene);
+	QWidget::mousePressEvent(event);
+}
+
 void ViewerDisplay::mouseDoubleClickEvent(QMouseEvent *event)
 {
-	if (event->button() == Qt::LeftButton)
-		emit doubleClicked();
+	int kind = 0, scene = -1;
+	if (event->button() == Qt::LeftButton && tileAt(event->position(), kind, scene))
+		emit tileDoubleClicked(kind, scene);
 	QWidget::mouseDoubleClickEvent(event);
 }
 

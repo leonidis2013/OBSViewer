@@ -85,9 +85,40 @@ int Layout::sceneTileCount() const
 	return count;
 }
 
+Layout makeAutoLayout(int sceneCount)
+{
+	Layout l{kAutoLayoutId, "Auto (2 + all scenes)", {}};
+	l.tiles.push_back(preview(0.0f, 0.0f, 0.5f));
+	l.tiles.push_back(program(0.5f, 0.0f, 0.5f));
+	const int n = std::max(0, sceneCount);
+	if (n == 0)
+		return l;
+
+	// Fewest columns (min 4) whose rows still fit in the lower half.
+	int cols = 4;
+	while (cols < 12 && static_cast<float>((n + cols - 1) / cols) / static_cast<float>(cols) > 0.5f)
+		++cols;
+	const float s = 1.0f / static_cast<float>(cols);
+	const int shown = std::min(n, cols * (cols / 2)); // what fits in the lower half
+	for (int i = 0; i < shown; ++i) {
+		const int row = i / cols;
+		const int col = i % cols;
+		const int inRow = std::min(cols, shown - row * cols);
+		const float x0 = (1.0f - static_cast<float>(inRow) * s) / 2.0f; // centre short rows
+		l.tiles.push_back(scene(i, x0 + static_cast<float>(col) * s, 0.5f + static_cast<float>(row) * s, s));
+	}
+	return l;
+}
+
+Layout resolveLayout(const Layout &layout, int sceneCount)
+{
+	return layout.id == kAutoLayoutId ? makeAutoLayout(sceneCount) : layout;
+}
+
 const std::vector<Layout> &allLayouts()
 {
 	static const std::vector<Layout> layouts = {
+		makeAutoLayout(4),
 		makeAtem(),
 		makeClassic(),
 		makeBigProgram(),
@@ -101,6 +132,9 @@ const Layout &layoutById(const std::string &id)
 {
 	for (const auto &l : allLayouts())
 		if (l.id == id)
+			return l;
+	for (const auto &l : allLayouts())
+		if (l.id == kDefaultLayoutId)
 			return l;
 	return allLayouts().front();
 }

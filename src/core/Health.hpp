@@ -46,6 +46,22 @@ struct HealthReport {
 
 HealthReport evaluateHealth(const HealthInputs &in);
 
+// Frame rate and encoding, shown behind the second (Performance) button.
+struct PerfInputs {
+	double fpsTarget = 30.0;
+	double fpsActive = 0.0;
+	double renderMs = 0.0;        // average time to render a frame
+	double renderLagPct = 0.0;    // last 10 s
+	double encoderSkipPct = 0.0;  // last 10 s
+	bool encoding = false;        // stream or recording active
+	double cpuPct = -1.0;
+	double memoryMB = 0.0;
+	std::string streamEncoder;    // "Apple VT H264 Hardware · 1920×1080 · 6000 kbps", empty when idle
+	std::string recordEncoder;
+};
+
+HealthReport evaluatePerformance(const PerfInputs &in);
+
 const char *levelName(Level level);
 
 } // namespace obsviewer

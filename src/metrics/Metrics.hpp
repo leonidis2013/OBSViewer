@@ -76,6 +76,15 @@ public:
 
 	HealthReport health;
 
+	struct Perf {
+		double fpsTarget = 30.0;
+		double fpsActive = 0.0;
+		double renderMs = 0.0;
+	} perf;
+	HealthReport performance;
+
+	int measuredTrack = 1; // 1-based OBS track the loudness meter is on
+
 	// Loudness target from Settings.
 	float targetLufs() const;
 	float toleranceLu() const;
@@ -91,6 +100,8 @@ signals:
 private:
 	Metrics() = default;
 	void sample();
+	static int streamTrackIndex(); // 0-based mix index the stream sends
+	size_t meterTrackIndex() const;
 
 	QTimer *timer_ = nullptr;
 	os_cpu_usage_info *cpu_ = nullptr;

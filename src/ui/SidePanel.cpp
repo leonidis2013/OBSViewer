@@ -33,13 +33,14 @@ public:
 		setToolTip(QStringLiteral("Show everything OBSViewer is checking"));
 	}
 
-	void setState(const HealthReport &report, bool expanded, bool blink, qreal scale)
+	void setState(const HealthReport &report, bool expanded, bool blink, qreal scale, const QString &label = {})
 	{
 		report_ = report;
 		expanded_ = expanded;
 		blink_ = blink;
 		scale_ = scale;
-		setFixedHeight(static_cast<int>(30 * scale));
+		customLabel_ = label;
+		setFixedHeight(static_cast<int>(28 * scale));
 		update();
 	}
 
@@ -63,7 +64,10 @@ protected:
 			}
 		}
 		QString label;
-		if (bads)
+		if (!customLabel_.isEmpty())
+			label = bads ? QStringLiteral("%1 · %2").arg(customLabel_, QString::fromStdString(firstBad))
+				     : customLabel_;
+		else if (bads)
 			label = QStringLiteral("Problem: %1").arg(QString::fromStdString(firstBad));
 		else if (warns)
 			label = warns == 1 ? QStringLiteral("1 warning") : QStringLiteral("%1 warnings").arg(warns);
@@ -91,6 +95,7 @@ private:
 	bool expanded_ = false;
 	bool blink_ = false;
 	qreal scale_ = 1.0;
+	QString customLabel_;
 };
 
 // ---------------------------------------------------------------------------
@@ -103,10 +108,11 @@ public:
 		setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
 	}
 
-	void setState(const HealthReport &report, qreal scale)
+	void setState(const HealthReport &report, qreal scale, const QString &title)
 	{
 		report_ = report;
 		scale_ = scale;
+		title_ = title;
 		update();
 	}
 
@@ -120,7 +126,7 @@ protected:
 
 		const qreal pad = 9 * scale_;
 		paint::text(p, QRectF(r.left() + pad, r.top() + 4 * scale_, r.width() - 2 * pad, 20 * scale_),
-			    QStringLiteral("HEALTH CHECKS"), col(theme::kTextDim), paint::font(10 * scale_, true));
+			    title_, col(theme::kTextDim), paint::font(10 * scale_, true));
 
 		const int n = static_cast<int>(report_.checks.size());
 		const qreal top = r.top() + 26 * scale_;
@@ -147,6 +153,7 @@ protected:
 private:
 	HealthReport report_;
 	qreal scale_ = 1.0;
+	QString title_;
 };
 
 // ---------------------------------------------------------------------------
@@ -413,7 +420,10 @@ SidePanel::SidePanel(QWidget *parent) : QWidget(parent)
 	setAttribute(Qt::WA_StyledBackground, false);
 
 	health_ = new HealthButton(this);
-	connect(health_, &QAbstractButton::clicked, this, &SidePanel::toggleDetails);
+	connect(health_, &QAbstractButton::clicked, this, [this] { showPage(stack_->currentIndex() == 1 ? 0 : 1); });
+	perf_ = new HealthButton(this);
+	perf_->setToolTip(QStringLiteral("Frame rate, render time and encoders"));
+	connect(perf_, &QAbstractButton::clicked, this, [this] { showPage(stack_->currentIndex() == 2 ? 0 : 2); });
 
 	stack_ = new QStackedWidget(this);
 
@@ -441,22 +451,29 @@ SidePanel::SidePanel(QWidget *parent) : QWidget(parent)
 	cl->addWidget(audioSection_, 1);
 
 	details_ = new HealthList(stack_);
-	connect(details_, &QAbstractButton::clicked, this, &SidePanel::toggleDetails);
+	connect(details_, &QAbstractButton::clicked, this, [this] { showPage(0); });
+	perfDetails_ = new HealthList(stack_);
+	connect(perfDetails_, &QAbstractButton::clicked, this, [this] { showPage(0); });
 
 	stack_->addWidget(controls);
 	stack_->addWidget(details_);
+	stack_->addWidget(perfDetails_);
 
 	auto *layout = new QVBoxLayout(this);
 	layout->setContentsMargins(0, 0, 0, 0);
 	layout->setSpacing(6);
-	layout->addWidget(health_);
+	auto *buttons = new QVBoxLayout();
+	buttons->setSpacing(4);
+	buttons->addWidget(health_);
+	buttons->addWidget(perf_);
+	layout->addLayout(buttons);
 	layout->addWidget(stack_, 1);
 
 	blinkTimer_ = new QTimer(this);
 	blinkTimer_->setInterval(500);
 	connect(blinkTimer_, &QTimer::timeout, this, [this] {
 		blink_ = !blink_;
-		if (Metrics::get().health.overall >= Level::Warn)
+		if (Metrics::get().health.overall >= Level::Warn || Metrics::get().performance.overall >= Level::Warn)
 			refresh();
 	});
 	blinkTimer_->start();
@@ -482,9 +499,9 @@ void SidePanel::paintEvent(QPaintEvent *)
 	// transparent: the parent paints the background
 }
 
-void SidePanel::toggleDetails()
+void SidePanel::showPage(int page)
 {
-	stack_->setCurrentIndex(stack_->currentIndex() == 0 ? 1 : 0);
+	stack_->setCurrentIndex(page);
 	refresh();
 }
 
@@ -496,7 +513,10 @@ void SidePanel::refresh()
 	const HealthReport &h = m.health;
 
 	health_->setState(h, stack_->currentIndex() == 1, blink_, s);
-	details_->setState(h, s);
+	details_->setState(h, s, QStringLiteral("HEALTH CHECKS"));
+	perf_->setState(m.performance, stack_->currentIndex() == 2, blink_, s,
+			QStringLiteral("%1 fps · %2 ms").arg(m.perf.fpsActive, 0, 'f', 2).arg(m.perf.renderMs, 0, 'f', 1));
+	perfDetails_->setState(m.performance, s, QStringLiteral("PERFORMANCE"));
 
 	// ---- stream ----
 	if (m.stream.active)

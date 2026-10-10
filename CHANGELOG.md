@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.4.0] — 2026-10-10
+
+Control from fullscreen, scene switching and performance stats.
+
+- Fullscreen now has a toolbar on top: layout, what clicking a tile does, move to another screen, Settings and Exit. Hide it from the right-click menu or Settings.
+- Settings opens on top of the fullscreen view instead of behind it.
+- Scene switching: click a scene tile to send it to Preview or cut it to Program (choose in the toolbar, the right-click menu or Settings; default Preview). Outside Studio Mode a click switches the scene. Double-click the Preview tile to take it to Program.
+- Right-click menu now lists scenes: Send to Preview / Cut to Program (Studio Mode) or Switch Scene.
+- New "Auto (2 + all scenes)" layout: Preview and Program large on top, every scene below, resized to fit (4 to 12 per row).
+- Program and Preview tiles no longer have red / green boxes; scene tiles still show tally.
+- Performance button under the health light: frame rate against target, render time per frame, missed and skipped frames, stream and record encoder (name, resolution, bitrate), CPU and memory. Click it to expand.
+- The loudness meter now follows the track your stream sends automatically (Settings ▸ Audio ▸ Measure ▸ "Stream output"). It only listens; it never changes audio.
+
 ## [0.3.0] — 2026-10-10
 
 Stage 3: audio on every tile.
