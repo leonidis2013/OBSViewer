@@ -7,6 +7,7 @@
 #include "audio/meters/TruePeakMeter.h"
 #include "core/Health.hpp"
 #include "core/History.hpp"
+#include "core/LevelMath.hpp"
 #include "core/Version.hpp"
 #include "update/ReleaseInfo.hpp"
 #include "viewer/Layouts.hpp"
@@ -315,6 +316,52 @@ static void testLoudness()
 	CHECK(std::fabs(tp.holdDb() - (-23.0f)) < 0.3f);
 }
 
+static void testLevelMath()
+{
+	using namespace obsviewer::levels;
+	CHECK(clean(-INFINITY) == kFloorDb);
+	CHECK(clean(NAN) == kFloorDb);
+	CHECK(clean(-200.0f) == kFloorDb);
+	CHECK(clean(-6.0f) == -6.0f);
+
+	// instant rise, 20 dB/s fall
+	CHECK(ballistic(-40.0f, -10.0f, 0.05) == -10.0f);
+	CHECK(std::fabs(ballistic(-10.0f, -60.0f, 0.5) - (-20.0f)) < 1e-4f);
+	CHECK(ballistic(-110.0f, kFloorDb, 5.0) == kFloorDb);
+
+	CHECK(meterPos(0.0f) == 1.0f);
+	CHECK(meterPos(-60.0f) == 0.0f);
+	CHECK(std::fabs(meterPos(-30.0f) - 0.5f) < 1e-4f);
+	CHECK(meterPos(6.0f) == 1.0f);
+
+	// combine: loudest unmuted source per channel
+	{
+		SourceReading a, b, m;
+		a.peak[0] = -12.0f; a.peak[1] = -20.0f; a.rms[0] = -18.0f; a.rms[1] = -26.0f;
+		b.peak[0] = -30.0f; b.peak[1] = -6.0f;  b.rms[0] = -36.0f; b.rms[1] = -12.0f;
+		m.peak[0] = m.peak[1] = 0.0f; m.muted = true; m.clipped = true;
+		const TileLevels t = combine({a, b, m});
+		CHECK(t.hasAudio && !t.allMuted && !t.clipped);
+		CHECK(t.peak[0] == -12.0f && t.peak[1] == -6.0f);
+		CHECK(t.rms[0] == -18.0f && t.rms[1] == -12.0f);
+	}
+	{
+		SourceReading m1, m2;
+		m1.muted = m2.muted = true;
+		const TileLevels t = combine({m1, m2});
+		CHECK(t.hasAudio && t.allMuted && t.peak[0] == kFloorDb);
+	}
+	{
+		const TileLevels t = combine({});
+		CHECK(!t.hasAudio && !t.allMuted);
+	}
+	{
+		SourceReading c;
+		c.clipped = true;
+		CHECK(combine({c}).clipped);
+	}
+}
+
 int main()
 {
 	testLayouts();
@@ -324,6 +371,7 @@ int main()
 	testHistory();
 	testHealth();
 	testLoudness();
+	testLevelMath();
 	std::printf("%d checks, %d failures\n", checks, failures);
 	return failures == 0 ? 0 : 1;
 }

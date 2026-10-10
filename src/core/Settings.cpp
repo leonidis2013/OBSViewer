@@ -52,6 +52,7 @@ void Settings::load()
 	showSidebar = getBool(data, "show_sidebar", defaults.showSidebar);
 	showNetbar = getBool(data, "show_netbar", defaults.showNetbar);
 	alarms = getBool(data, "alarms", defaults.alarms);
+	tileMeters = getBool(data, "tile_meters", defaults.tileMeters);
 	loudnessPreset = obs_data_has_user_value(data, "loudness_preset")
 				 ? static_cast<int>(obs_data_get_int(data, "loudness_preset"))
 				 : defaults.loudnessPreset;
@@ -95,6 +96,7 @@ void Settings::save() const
 	obs_data_set_bool(data, "show_sidebar", showSidebar);
 	obs_data_set_bool(data, "show_netbar", showNetbar);
 	obs_data_set_bool(data, "alarms", alarms);
+	obs_data_set_bool(data, "tile_meters", tileMeters);
 	obs_data_set_int(data, "loudness_preset", loudnessPreset);
 	obs_data_set_double(data, "custom_target_lufs", customTargetLufs);
 	obs_data_set_int(data, "audio_track", audioTrack);

@@ -53,6 +53,9 @@ target_sources(
     src/App.hpp
     src/audio/ProgramLoudness.cpp
     src/audio/ProgramLoudness.hpp
+    src/audio/SourceLevels.cpp
+    src/audio/SourceLevels.hpp
+    src/core/LevelMath.hpp
     src/audio/meters/Biquad.h
     src/audio/meters/LoudnessMeter.h
     src/audio/meters/LoudnessPresets.h

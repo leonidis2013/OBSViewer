@@ -40,6 +40,7 @@ void App::init()
 
 	Settings::get().load();
 	ViewerState::get().setShowLabels(Settings::get().showLabels);
+	ViewerState::get().setShowTileMeters(Settings::get().tileMeters);
 
 	auto *mainWindow = static_cast<QMainWindow *>(obs_frontend_get_main_window());
 
@@ -242,6 +243,7 @@ void App::applySettings()
 {
 	const Settings &s = Settings::get();
 	ViewerState::get().setShowLabels(s.showLabels);
+	ViewerState::get().setShowTileMeters(s.tileMeters);
 	if (dock_) {
 		dock_->setLayoutId(s.dockLayout);
 		dock_->applySettings();

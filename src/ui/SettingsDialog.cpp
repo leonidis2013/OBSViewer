@@ -66,6 +66,8 @@ SettingsDialog::SettingsDialog(QWidget *parent) : QDialog(parent)
 	viewForm->addRow(QString(), showSidebar_);
 	viewForm->addRow(QString(), showNetbar_);
 	viewForm->addRow(QString(), alarms_);
+	tileMeters_ = new QCheckBox(tr("Show audio meters on tiles"), viewGroup);
+	viewForm->addRow(QString(), tileMeters_);
 
 	// ---- Audio ----
 	auto *audioGroup = new QGroupBox(tr("AUDIO"), this);
@@ -178,6 +180,7 @@ void SettingsDialog::load()
 	showSidebar_->setChecked(s.showSidebar);
 	showNetbar_->setChecked(s.showNetbar);
 	alarms_->setChecked(s.alarms);
+	tileMeters_->setChecked(s.tileMeters);
 	loudnessPreset_->setCurrentIndex(std::clamp(s.loudnessPreset, 0, bm::kNumLoudnessPresets - 1));
 	customTarget_->setValue(s.customTargetLufs);
 	customTarget_->setEnabled(loudnessPreset_->currentIndex() == bm::kCustomPresetIndex);
@@ -204,6 +207,7 @@ void SettingsDialog::apply()
 	s.showSidebar = showSidebar_->isChecked();
 	s.showNetbar = showNetbar_->isChecked();
 	s.alarms = alarms_->isChecked();
+	s.tileMeters = tileMeters_->isChecked();
 	s.loudnessPreset = loudnessPreset_->currentIndex();
 	s.customTargetLufs = static_cast<float>(customTarget_->value());
 	s.audioTrack = audioTrack_->currentData().toInt();

@@ -1,5 +1,7 @@
 #include "viewer/ViewerState.hpp"
 
+#include "audio/SourceLevels.hpp"
+
 #include <obs-frontend-api.h>
 
 #include <algorithm>
@@ -34,6 +36,71 @@ void releaseAll(std::vector<obs_weak_source_t *> &weak)
 	for (obs_weak_source_t *w : weak)
 		obs_weak_source_release(w);
 	weak.clear();
+}
+
+// Audio sources a scene plays: visible items, including inside groups and nested
+// scenes. Collected without holding any scene lock while recursing.
+std::vector<obs_source_t *> collectAudio(obs_source_t *root)
+{
+	std::vector<obs_source_t *> audio;   // strong refs, caller releases
+	std::vector<obs_source_t *> pending; // scenes still to enumerate (strong refs)
+	std::vector<obs_source_t *> visited;
+	if (root)
+		pending.push_back(obs_source_get_ref(root));
+
+	struct Ctx {
+		std::vector<obs_source_t *> *audio;
+		std::vector<obs_source_t *> *pending;
+	};
+
+	while (!pending.empty()) {
+		obs_source_t *src = pending.back();
+		pending.pop_back();
+		if (std::find(visited.begin(), visited.end(), src) != visited.end()) {
+			obs_source_release(src);
+			continue;
+		}
+		visited.push_back(src);
+
+		obs_scene_t *scene = obs_scene_from_source(src);
+		if (!scene)
+			scene = obs_group_from_source(src);
+		if (!scene)
+			continue;
+
+		Ctx ctx{&audio, &pending};
+		obs_scene_enum_items(
+			scene,
+			[](obs_scene_t *, obs_sceneitem_t *item, void *param) {
+				auto *c = static_cast<Ctx *>(param);
+				if (!obs_sceneitem_visible(item))
+					return true;
+				obs_source_t *child = obs_sceneitem_get_source(item);
+				if (!child)
+					return true;
+				if (obs_sceneitem_is_group(item) || obs_scene_from_source(child)) {
+					c->pending->push_back(obs_source_get_ref(child));
+					return true;
+				}
+				if ((obs_source_get_output_flags(child) & OBS_SOURCE_AUDIO) &&
+				    std::find(c->audio->begin(), c->audio->end(), child) == c->audio->end())
+					c->audio->push_back(obs_source_get_ref(child));
+				return true;
+			},
+			&ctx);
+	}
+	for (obs_source_t *v : visited)
+		obs_source_release(v);
+	return audio;
+}
+
+AudioList touchAll(const std::vector<obs_source_t *> &sources)
+{
+	AudioList list;
+	for (obs_source_t *s : sources)
+		if (auto e = SourceLevels::get().touch(s))
+			list.push_back(std::move(e));
+	return list;
 }
 
 } // namespace
@@ -158,6 +225,30 @@ void ViewerState::refresh()
 		newLabels.studioOff = createLabel("STUDIO MODE OFF", height, kTileLabelScale * 0.8f);
 	}
 
+	// Per-scene audio for the tile meters (volume meters are created / destroyed
+	// here, never under the lock).
+	std::vector<AudioList> newSceneAudio;
+	AudioList newPreviewAudio;
+	if (showTileMeters_) {
+		SourceLevels::get().beginSync();
+		newSceneAudio.reserve(list.sources.num);
+		for (size_t i = 0; i < list.sources.num; ++i) {
+			std::vector<obs_source_t *> srcs = collectAudio(list.sources.array[i]);
+			newSceneAudio.push_back(touchAll(srcs));
+			for (obs_source_t *a : srcs)
+				obs_source_release(a);
+		}
+		std::vector<obs_source_t *> pv = collectAudio(preview);
+		newPreviewAudio = touchAll(pv);
+		for (obs_source_t *a : pv)
+			obs_source_release(a);
+		SourceLevels::get().endSync();
+	} else {
+		SourceLevels::get().clear();
+	}
+	if (rebuildStatic)
+		newLabels.muted = createLabel("MUTED", height, kTileLabelScale * 0.7f);
+
 	obs_weak_source_t *newProgram = program ? obs_source_get_weak_source(program) : nullptr;
 	obs_weak_source_t *newPreview = preview ? obs_source_get_weak_source(preview) : nullptr;
 
@@ -173,6 +264,9 @@ void ViewerState::refresh()
 		streaming_ = streaming;
 		recording_ = recording;
 		recordingPaused_ = paused;
+
+		std::swap(sceneAudio_, newSceneAudio);
+		std::swap(previewAudio_, newPreviewAudio);
 
 		oldWeak.push_back(program_);
 		oldWeak.push_back(preview_);
@@ -195,6 +289,7 @@ void ViewerState::refresh()
 			oldSources.push_back(std::exchange(labels_.onAir, newLabels.onAir));
 			oldSources.push_back(std::exchange(labels_.rec, newLabels.rec));
 			oldSources.push_back(std::exchange(labels_.studioOff, newLabels.studioOff));
+			oldSources.push_back(std::exchange(labels_.muted, newLabels.muted));
 		}
 	}
 
@@ -233,6 +328,12 @@ void ViewerState::removeView()
 		applyShowing(false);
 }
 
+void ViewerState::setShowTileMeters(bool show)
+{
+	std::lock_guard<std::mutex> lock(mutex_);
+	showTileMeters_ = show;
+}
+
 void ViewerState::setShowLabels(bool show)
 {
 	std::lock_guard<std::mutex> lock(mutex_);
@@ -255,9 +356,12 @@ void ViewerState::clear()
 		oldWeak.push_back(std::exchange(program_, nullptr));
 		oldWeak.push_back(std::exchange(preview_, nullptr));
 		for (obs_source_t **l : {&labels_.program, &labels_.preview, &labels_.onAir, &labels_.rec,
-					 &labels_.programName, &labels_.studioOff})
+					 &labels_.programName, &labels_.studioOff, &labels_.muted})
 			oldSources.push_back(std::exchange(*l, nullptr));
+		sceneAudio_.clear();
+		previewAudio_.clear();
 	}
+	SourceLevels::get().clear();
 
 	releaseAll(oldSources);
 	releaseAll(oldWeak);
@@ -289,6 +393,12 @@ ViewerState::Snapshot ViewerState::acquire()
 	snap.recLabel = obs_source_get_ref(labels_.rec);
 	snap.programNameLabel = obs_source_get_ref(labels_.programName);
 	snap.studioOffLabel = obs_source_get_ref(labels_.studioOff);
+	snap.mutedLabel = obs_source_get_ref(labels_.muted);
+	snap.showTileMeters = showTileMeters_;
+	if (showTileMeters_) {
+		snap.sceneAudio = sceneAudio_;
+		snap.previewAudio = previewAudio_;
+	}
 	snap.studioMode = studioMode_;
 	snap.streaming = streaming_;
 	snap.recording = recording_;
@@ -308,7 +418,7 @@ void ViewerState::release(Snapshot &snap)
 	for (obs_source_t *s : snap.sceneLabels)
 		obs_source_release(s);
 	for (obs_source_t *s : {snap.programLabel, snap.previewLabel, snap.onAirLabel, snap.recLabel,
-				snap.programNameLabel, snap.studioOffLabel})
+				snap.programNameLabel, snap.studioOffLabel, snap.mutedLabel})
 		obs_source_release(s);
 	snap = Snapshot{};
 }
