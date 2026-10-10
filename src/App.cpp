@@ -1,6 +1,8 @@
 #include "App.hpp"
 
+#include "bus/MasterBus.hpp"
 #include "core/Settings.hpp"
+#include "ui/MasterBusWindow.hpp"
 #include "metrics/Metrics.hpp"
 #include "ui/FullscreenWindow.hpp"
 #include "ui/Menu.hpp"
@@ -68,6 +70,7 @@ void App::shutdown()
 
 	obs_frontend_remove_event_callback(&App::onFrontendEvent, this);
 	Metrics::get().stop();
+	MasterBus::get().unload();
 	if (pollTimer_)
 		pollTimer_->stop();
 	if (updater_)
@@ -91,6 +94,7 @@ void App::handleFrontendEvent(enum obs_frontend_event event)
 		ViewerState::get().refresh();
 		pollTimer_->start();
 		Metrics::get().start();
+		MasterBus::get().load();
 		// Give OBS a moment to settle before talking to the network.
 		QTimer::singleShot(8000, this, [this] {
 			if (!exiting_)
@@ -110,18 +114,27 @@ void App::handleFrontendEvent(enum obs_frontend_event event)
 	case OBS_FRONTEND_EVENT_RECORDING_PAUSED:
 	case OBS_FRONTEND_EVENT_RECORDING_UNPAUSED:
 	case OBS_FRONTEND_EVENT_SCENE_COLLECTION_CHANGED:
-		if (!exiting_)
+		if (!exiting_) {
 			ViewerState::get().refresh();
+			MasterBus::get().collectionChanged();
+		}
 		break;
 
 	case OBS_FRONTEND_EVENT_SCENE_COLLECTION_CLEANUP:
 		ViewerState::get().clear();
 		break;
 
+	case OBS_FRONTEND_EVENT_SCENE_COLLECTION_CHANGING:
+		MasterBus::get().collectionChanging();
+		break;
+
 	case OBS_FRONTEND_EVENT_SCRIPTING_SHUTDOWN:
 	case OBS_FRONTEND_EVENT_EXIT:
 		exiting_ = true;
 		Metrics::get().stop();
+		if (masterBus_)
+			masterBus_->close();
+		MasterBus::get().unload();
 		if (pollTimer_)
 			pollTimer_->stop();
 		if (updater_)
@@ -158,6 +171,8 @@ void App::buildToolsMenu()
 	connect(toolsMenu_->addAction(tr("Close Fullscreen")), &QAction::triggered, this,
 		later([this] { closeFullscreen(); }));
 	toolsMenu_->addSeparator();
+	connect(toolsMenu_->addAction(tr("Master Bus…")), &QAction::triggered, this,
+		later([this] { openMasterBus(); }));
 	connect(toolsMenu_->addAction(tr("Settings…")), &QAction::triggered, this, later([this] { openSettings(); }));
 	connect(toolsMenu_->addAction(tr("Check for Updates…")), &QAction::triggered, this,
 		later([this] { checkForUpdates(true); }));
@@ -235,6 +250,24 @@ void App::openSettings(QWidget *parent)
 	settings_->raise();
 	settings_->activateWindow();
 	obs_log(LOG_INFO, "settings: visible=%d", settings_->isVisible());
+}
+
+void App::openMasterBus(QWidget *parent)
+{
+	obs_log(LOG_INFO, "master bus: opening window");
+	if (!parent)
+		parent = static_cast<QWidget *>(obs_frontend_get_main_window());
+	if (masterBus_ && masterBus_->parentWidget() != parent) {
+		masterBus_->close();
+		masterBus_ = nullptr;
+	}
+	if (!masterBus_) {
+		masterBus_ = new MasterBusWindow(parent);
+		masterBus_->setAttribute(Qt::WA_DeleteOnClose);
+	}
+	masterBus_->show();
+	masterBus_->raise();
+	masterBus_->activateWindow();
 }
 
 void App::switchScene(int sceneIndex, int action)

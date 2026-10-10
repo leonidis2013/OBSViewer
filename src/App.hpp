@@ -15,6 +15,7 @@ namespace obsviewer {
 class ViewerDock;
 class FullscreenWindow;
 class SettingsDialog;
+class MasterBusWindow;
 class Updater;
 
 // Owns OBSViewer's UI objects and wires them to OBS. Qt main thread only.
@@ -32,6 +33,7 @@ public:
 	bool fullscreenOpen() const;
 	// parent: the window asking (so the dialog opens on top of fullscreen), or null for OBS.
 	void openSettings(QWidget *parent = nullptr);
+	void openMasterBus(QWidget *parent = nullptr);
 	// action: Settings::ClickPreview or Settings::ClickProgram.
 	void switchScene(int sceneIndex, int action);
 	// A tile in a multiview was clicked (kind = TileKind as int).
@@ -53,6 +55,7 @@ private:
 	QPointer<ViewerDock> dock_;
 	QPointer<FullscreenWindow> fullscreen_;
 	QPointer<SettingsDialog> settings_;
+	QPointer<MasterBusWindow> masterBus_;
 	QPointer<QMenu> toolsMenu_;
 	QTimer *pollTimer_ = nullptr;
 	Updater *updater_ = nullptr;

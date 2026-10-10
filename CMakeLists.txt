@@ -45,6 +45,55 @@ endif()
 
 target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src")
 
+# ---------------------------------------------------------------------------
+# Master bus plugin host (JUCE). Built as its own static library so JUCE never
+# mixes with the Qt / OBS code, and with Objective-C ARC off (JUCE requires that;
+# the OBS template turns ARC on for everything else).
+include(FetchContent)
+FetchContent_Declare(
+  JUCE
+  GIT_REPOSITORY https://github.com/juce-framework/JUCE.git
+  GIT_TAG 8.0.15
+  GIT_SHALLOW ON
+)
+FetchContent_MakeAvailable(JUCE)
+
+add_library(obsviewer_bus STATIC src/bus/Engine.cpp src/bus/Engine.hpp)
+target_compile_features(obsviewer_bus PRIVATE cxx_std_17)
+target_include_directories(obsviewer_bus PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/src")
+target_link_libraries(
+  obsviewer_bus
+  PRIVATE juce::juce_audio_processors juce::juce_gui_basics juce::juce_recommended_config_flags
+)
+target_compile_definitions(
+  obsviewer_bus
+  PRIVATE
+    JUCE_GLOBAL_MODULE_SETTINGS_INCLUDED=1
+    JUCE_STANDALONE_APPLICATION=0
+    JUCE_PLUGINHOST_VST3=1
+    JUCE_PLUGINHOST_AU=1
+    JUCE_PLUGINHOST_LADSPA=0
+    JUCE_PLUGINHOST_LV2=0
+    JUCE_USE_CURL=0
+    JUCE_WEB_BROWSER=0
+    JUCE_MODAL_LOOPS_PERMITTED=0
+    JUCE_DISABLE_JUCE_VERSION_PRINTING=1
+    DONT_SET_USING_JUCE_NAMESPACE=1
+)
+set_target_properties(
+  obsviewer_bus
+  PROPERTIES
+    POSITION_INDEPENDENT_CODE ON
+    XCODE_ATTRIBUTE_CLANG_ENABLE_OBJC_ARC NO
+    XCODE_ATTRIBUTE_CLANG_ENABLE_OBJC_WEAK NO
+    XCODE_ATTRIBUTE_CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING NO
+    XCODE_ATTRIBUTE_GCC_TREAT_WARNINGS_AS_ERRORS NO
+    XCODE_ATTRIBUTE_CLANG_WARN_COMMA NO
+    XCODE_ATTRIBUTE_GCC_WARN_64_TO_32_BIT_CONVERSION NO
+    XCODE_ATTRIBUTE_GCC_WARN_SIGN_COMPARE NO
+)
+target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE obsviewer_bus)
+
 target_sources(
   ${CMAKE_PROJECT_NAME}
   PRIVATE
@@ -54,6 +103,8 @@ target_sources(
     src/audio/ProgramLoudness.cpp
     src/audio/ProgramLoudness.hpp
     src/audio/SourceLevels.cpp
+    src/bus/MasterBus.cpp
+    src/bus/MasterBus.hpp
     src/audio/SourceLevels.hpp
     src/core/LevelMath.hpp
     src/audio/meters/Biquad.h
@@ -95,6 +146,8 @@ target_sources(
     src/ui/Paint.hpp
     src/ui/SidePanel.cpp
     src/ui/SidePanel.hpp
+    src/ui/MasterBusWindow.cpp
+    src/ui/MasterBusWindow.hpp
     src/ui/Menu.cpp
     src/ui/Menu.hpp
     src/update/Updater.cpp

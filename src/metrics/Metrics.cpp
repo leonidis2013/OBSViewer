@@ -54,8 +54,9 @@ std::string describeEncoder(obs_output_t *out)
 	if (obs_data_t *settings = obs_encoder_get_settings(enc)) {
 		const long long kbps = obs_data_get_int(settings, "bitrate");
 		const char *rc = obs_data_get_string(settings, "rate_control");
-		if (kbps > 0 && (!rc || std::strcmp(rc, "CRF") != 0 && std::strcmp(rc, "CQP") != 0 &&
-					     std::strcmp(rc, "CQ") != 0))
+		const bool constantQuality =
+			rc && (std::strcmp(rc, "CRF") == 0 || std::strcmp(rc, "CQP") == 0 || std::strcmp(rc, "CQ") == 0);
+		if (kbps > 0 && !constantQuality)
 			d += " · " + std::to_string(kbps) + " kbps";
 		else if (rc && *rc)
 			d += std::string(" · ") + rc;

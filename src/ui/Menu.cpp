@@ -152,6 +152,8 @@ void buildViewerMenu(QMenu &menu, const std::string &layoutId, const std::functi
 
 	QWidget *owner = menu.parentWidget() ? menu.parentWidget()->window() : nullptr;
 	QPointer<QWidget> guardedOwner(owner);
+	QObject::connect(menu.addAction(QStringLiteral("Master Bus…")), &QAction::triggered, &menu,
+			 [guardedOwner] { later([guardedOwner] { App::get().openMasterBus(guardedOwner.data()); }); });
 	QObject::connect(menu.addAction(QStringLiteral("Settings…")), &QAction::triggered, &menu,
 			 [guardedOwner] { later([guardedOwner] { App::get().openSettings(guardedOwner.data()); }); });
 	if (fullscreen)

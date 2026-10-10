@@ -26,7 +26,7 @@ QLabel[heading="true"] {
 	font-weight: bold;
 	letter-spacing: 1px;
 }
-QComboBox, QLineEdit, QTextBrowser, QPlainTextEdit, QDoubleSpinBox {
+QComboBox, QLineEdit, QTextBrowser, QPlainTextEdit, QDoubleSpinBox, QListWidget {
 	background-color: #1E242C;
 	color: #E9EDF2;
 	border: 1px solid #2A323D;
