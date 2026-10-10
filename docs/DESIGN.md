@@ -35,7 +35,7 @@ channel strip that hosts VST3 and Audio Unit plugins.
 | 2 — Stream health | 0.2.x | Stream and record panels: bitrate (graph), dropped frames (network / encoder / render), congestion, uptime, reconnects, record duration and file size, multiple outputs (stream, record, virtual cam, replay buffer). |
 | 3 — Audio | 0.3.x | Per-tile audio meters (peak + RMS), program LUFS (momentary, short-term, integrated) and true peak with platform targets, mute indicators, clip and silence alarms. |
 | 4 — Alerts & utilities | 0.4.x | Black / frozen frame detection, clock, stream timer, countdown, CPU / render-lag readout, safe-area guides, click-to-switch, tile→scene assignment. |
-| 5 — Channel strip | 0.5.x | Plugin host (JUCE), master bus source, per-source strip filter, insert slots, gain stages, latency compensation. |
+| 5 — Master bus | 0.5.x | Plugin host (JUCE), master bus via a send track, insert slots, gain stages, meters, latency compensation. Per-source strip filter follows. |
 | 6 — Strip ↔ multiview | 0.6.x | Master LUFS, gain reduction and chain status on the multiview; out-of-process (crash-safe) plugin mode. |
 
 ---
@@ -307,44 +307,59 @@ releases-only repo) public removes this step.
 
 ---
 
-## 8. Channel strip (stages 5–6, design only)
+## 8. Master bus (0.5.0)
 
-### 8.1 Master bus
+### 8.1 Routing
 
-- OBSViewer registers an audio source, **OBSViewer Master Bus**. The user picks which
-  sources feed it. Their audio is captured
-  (`obs_source_add_audio_capture_callback`), summed, run through the mastering chain
-  and output by the Master Bus source.
-- Fed sources are removed from OBS's mix tracks automatically, so nothing is heard
-  twice; the original track assignments are restored when a source is removed from
-  the bus.
+OBS has no hook on its final mix, so the bus is built from OBS's own audio tracks:
 
-### 8.2 Per-source strip
+```
+routed sources ──► send track (default Track 6) ──► plugin chain ──► "Master Bus" source ──► output tracks (default Track 1)
+other sources  ───────────────────────────────────────────────────────────────────────────► output tracks
+```
 
-- An audio filter, **OBSViewer Channel Strip**, usable on any source.
+- Routing a source sets its track assignment to (original − output tracks) + send
+  track. The original assignment is remembered per scene collection
+  (`masterbus.json`) and restored on un-routing or when the bus is turned off.
+- The bus source is a private, hidden OBS audio source on global output channel 63,
+  assigned only to the output tracks (never the send track, so no feedback).
+- The send track's mix arrives through a raw audio callback on OBS's audio thread,
+  is processed in place, and is output with the original timestamp. OBS adds one
+  audio tick of buffering (≈ 20 ms) the first time; plugin latency is compensated
+  with a negative sync offset on the bus source.
+- If OBS starts with the bus off but sources still routed (e.g. after a crash),
+  their tracks are restored automatically.
+- Track assignments are ordinary OBS settings saved in the scene collection, and
+  are visible in Edit ▸ Advanced Audio Properties.
 
-### 8.3 Strip features (both)
+### 8.2 Plugin host
 
-- Unlimited insert slots: add, remove, drag to reorder, per-slot bypass, open the
-  plugin's own editor window.
-- Input and output trim (±12 dB) and pre/post meters per slot, matching BroadcastMaster.
-- Formats: VST3 and Audio Unit, hosted through JUCE. Plugin scan with a blocklist for
-  plugins that crash during scanning.
-- **Latency compensation:** the strip reports the summed plugin latency; OBSViewer
-  applies the matching audio sync offset so lip-sync holds.
-- **Risk to prove first:** JUCE's message loop and plugin editor windows running
-  inside OBS's Qt app on macOS. Stage 5 starts with a spike that loads one VST3 and
-  one AU and opens their editors.
-- **Licensing:** JUCE (AGPLv3 or commercial) with OBS (GPLv2+) is fine for private
-  use. Public distribution needs the licence question settled first.
+- JUCE 8 (`juce_audio_processors`), VST3 + Audio Unit, compiled into a separate
+  static library (`obsviewer_bus`) with Objective-C ARC off; the rest of the plugin
+  never includes JUCE. JUCE runs as a guest on OBS's run loop, exactly as plug-ins
+  do inside a DAW (`JUCE_STANDALONE_APPLICATION=0`).
+- Serial chain of slots: on / bypass (`processBlockBypassed`), input trim and
+  output gain ±12 dB, pre / post peak meters and gain-reduction readout, plugin
+  editor in a floating window (generic editor if the plugin has none), move up /
+  down, remove. Master input trim / output gain with meters.
+- Plugins with other channel layouts get a wider scratch buffer; stereo is
+  requested first.
+- Audio-thread safety: only the main thread changes the chain, under a lock held
+  for a few vector operations; plugins are created, prepared and destroyed outside
+  the lock. The audio thread holds the lock while processing; UI reads take none.
+- Scanning: JUCE `PluginDirectoryScanner`, one plugin per UI tick with progress; a
+  crash marker skips a plugin that crashed during the previous scan. The list is
+  cached in `plugin_config/obsviewer/bus/plugins.xml`.
+- Persistence: chain (plugin id, bypass, gains, plugin state as base64) and master
+  gains in `masterbus.json`, restored at start-up.
 
-### 8.4 Multiview integration (stage 6)
+### 8.3 Not yet
 
-- Master LUFS, true peak and gain reduction on the status strip.
-- Per-slot status (bypassed, CPU, latency) in a strip panel.
-- Out-of-process plugin mode so a crashing plugin cannot take OBS down.
-
----
+- Per-source channel strip (an OBS filter using the same host).
+- Out-of-process plugins (a crashing plugin can take OBS down with it).
+- Multiview integration (bus status and gain reduction on the side bar).
+- Licensing: JUCE is AGPLv3 / commercial; fine for private use, settle before any
+  public release.
 
 ## 9. Testing
 

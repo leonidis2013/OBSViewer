@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.5.0] — 2026-10-10
+
+Master bus with VST3 and Audio Unit inserts.
+
+- New Master Bus window (Tools ▸ OBSViewer ▸ Master Bus…, or right-click the multiview).
+- Tick the sources that should go through the bus. OBSViewer moves them off your output track (Track 1) onto a spare "bus input" track (Track 6 by default), runs that mix through your plugin chain, and sends the result to the output tracks. Unticking a source, or turning the bus off, puts its tracks back exactly as they were.
+- Plugin chain: VST3 and Audio Unit effects, in order top to bottom. Each slot has on / bypass, input trim and output gain (±12 dB), an input / output meter with gain-reduction readout, its own plugin window, and move up / down / remove.
+- Master input trim and output gain with a bus meter.
+- Scan for plugins finds VST3 and Audio Units installed on the Mac; the list is remembered.
+- Plugin latency is compensated so the bus stays in sync with video.
+- The chain and every plugin's settings are saved and restored when OBS starts.
+- Requires macOS 13 or newer (as OBS 32 does).
+
 ## [0.4.0] — 2026-10-10
 
 Control from fullscreen, scene switching and performance stats.

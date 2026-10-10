@@ -29,6 +29,22 @@ To uninstall, quit OBS and delete
 - **Tally:** red = on Program, green = on Preview (Studio Mode). Scene tiles show the
   first scenes in your scene list, in order.
 
+## Master bus
+
+Tools ▸ OBSViewer ▸ **Master Bus…** (or right-click the multiview).
+
+1. Click **Scan for plugins** once. It finds VST3 and Audio Unit effects on your Mac.
+2. Use **Add plugin** to build your chain (top to bottom). **Edit** opens a plugin's
+   own window. Each slot has on / bypass, input trim, output gain and a meter.
+3. Turn **Master bus on**, then tick the sources that should go through it (or
+   **Route all**).
+
+How it works: ticked sources are moved off your output track (Track 1, what the
+stream and recording send) onto a spare track (Track 6 by default). OBSViewer
+processes that track through your chain and puts the result back on Track 1.
+Unticking a source, or turning the bus off, restores its tracks exactly. Don't use
+the bus input track for anything else. Plugin latency is compensated automatically.
+
 ## Updates
 
 OBSViewer checks for a new version when OBS starts (at most every 12 hours), or

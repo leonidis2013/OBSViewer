@@ -99,7 +99,10 @@ struct Engine::Impl {
 	juce::AudioPluginFormatManager formats;
 	juce::KnownPluginList known;
 
-	mutable std::mutex chainLock; // audio thread only try_locks
+	// Only the main thread changes `chain`, and it holds this lock while it does.
+	// The audio thread holds it while processing. Main-thread reads need no lock
+	// (nothing else writes), so meters and the UI never stall the audio.
+	mutable std::mutex chainLock;
 	std::vector<std::shared_ptr<Slot>> chain;
 
 	double sampleRate = 48000.0;
@@ -141,9 +144,9 @@ struct Engine::Impl {
 		s.wide = std::max(p.getTotalNumInputChannels(), p.getTotalNumOutputChannels()) != 2;
 	}
 
+	// Main thread only.
 	std::shared_ptr<Slot> at(int index) const
 	{
-		std::lock_guard<std::mutex> lock(chainLock);
 		return index >= 0 && static_cast<size_t>(index) < chain.size() ? chain[static_cast<size_t>(index)] : nullptr;
 	}
 };
@@ -336,7 +339,6 @@ void Engine::openEditor(int index)
 
 int Engine::slotCount() const
 {
-	std::lock_guard<std::mutex> lock(impl_->chainLock);
 	return static_cast<int>(impl_->chain.size());
 }
 
@@ -400,7 +402,6 @@ Levels Engine::masterLevels() const
 
 int Engine::latencySamples() const
 {
-	std::lock_guard<std::mutex> lock(impl_->chainLock);
 	int total = 0;
 	for (const auto &s : impl_->chain)
 		if (s->plugin)
@@ -429,12 +430,7 @@ std::string Engine::saveChain() const
 	root.setProperty("version", 1, nullptr);
 	root.setProperty("masterIn", impl_->masterInDb, nullptr);
 	root.setProperty("masterOut", impl_->masterOutDb, nullptr);
-	std::vector<std::shared_ptr<Slot>> chain;
-	{
-		std::lock_guard<std::mutex> lock(impl_->chainLock);
-		chain = impl_->chain;
-	}
-	for (const auto &s : chain) {
+	for (const auto &s : impl_->chain) {
 		juce::ValueTree v("Slot");
 		v.setProperty("id", s->desc.createIdentifierString(), nullptr);
 		v.setProperty("name", s->desc.name, nullptr);
@@ -509,8 +505,10 @@ void Engine::process(float *left, float *right, int frames)
 	applyGain(io, frames, im.masterIn.load(std::memory_order_relaxed));
 	im.masterPre.feed(io, frames, im.sampleRate);
 
-	std::unique_lock<std::mutex> lock(im.chainLock, std::try_to_lock);
-	if (lock.owns_lock()) {
+	// Blocks only while the main thread is adding, removing or moving a plugin
+	// (a few vector operations; plugins are created and prepared outside the lock).
+	std::unique_lock<std::mutex> lock(im.chainLock);
+	{
 		for (int offset = 0; offset < frames; offset += im.maxBlock) {
 			const int n = std::min(im.maxBlock, frames - offset);
 			float *ch[2] = {left + offset, right + offset};
