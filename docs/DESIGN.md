@@ -260,7 +260,7 @@ releases-only repo) public removes this step.
 
 - **CI unit tests** (Linux, every push): layout geometry (tiles inside canvas, no
   overlaps, aspect ratio) and version comparison / release selection.
-- **CI build** (macOS 15 runner): universal Release build, `lipo` check that both
+- **CI build** (macOS 26 runner, Xcode 26.5 SDK — required by OBS 32.2): universal Release build, `lipo` check that both
   architectures are present, `.pkg` creation.
 - **Manual checklist per release** (Apple Silicon and Intel):
   dock opens and renders; fullscreen on each monitor; tally follows cuts and Studio

@@ -30,12 +30,20 @@ jobs:
   macos:
     name: macOS universal (arm64 + x86_64)
     needs: tests
-    runs-on: macos-15
+    runs-on: macos-26
     defaults:
       run:
         shell: bash
     steps:
       - uses: actions/checkout@v4
+
+      - name: Select Xcode (OBS 32.2 needs the macOS 26.5 SDK)
+        run: |
+          ls -d /Applications/Xcode*.app
+          XCODE="$(ls -d /Applications/Xcode_26*.app 2>/dev/null | sort -V | tail -n 1)"
+          if [[ -n "$XCODE" ]]; then sudo xcode-select --switch "$XCODE/Contents/Developer"; fi
+          xcodebuild -version
+          xcrun --sdk macosx --show-sdk-platform-version
 
       - name: Set version
         id: version
@@ -49,7 +57,6 @@ jobs:
           fi
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "Building OBSViewer $VERSION"
-          xcodebuild -version
 
       - name: Cache OBS dependencies
         uses: actions/cache@v4

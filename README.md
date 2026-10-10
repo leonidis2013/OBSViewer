@@ -69,7 +69,7 @@ Builds run on GitHub Actions (`.github/workflows/build.yml`):
 
 ### Building locally (optional)
 
-Requires Xcode 16+ and CMake 3.28+:
+Requires Xcode 26.5+ and CMake 3.28+:
 
 ```sh
 cmake --preset macos
