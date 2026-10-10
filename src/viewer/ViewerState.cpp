@@ -3,6 +3,7 @@
 #include <obs-frontend-api.h>
 
 #include <algorithm>
+#include <utility>
 
 namespace obsviewer {
 
@@ -21,18 +22,26 @@ std::string sourceName(obs_source_t *source)
 	return name ? std::string(name) : std::string();
 }
 
+void releaseAll(std::vector<obs_source_t *> &sources)
+{
+	for (obs_source_t *s : sources)
+		obs_source_release(s);
+	sources.clear();
+}
+
+void releaseAll(std::vector<obs_weak_source_t *> &weak)
+{
+	for (obs_weak_source_t *w : weak)
+		obs_weak_source_release(w);
+	weak.clear();
+}
+
 } // namespace
 
 ViewerState &ViewerState::get()
 {
 	static ViewerState state;
 	return state;
-}
-
-void ViewerState::setWeak(obs_weak_source_t *&slot, obs_source_t *source)
-{
-	obs_weak_source_release(slot);
-	slot = source ? obs_source_get_weak_source(source) : nullptr;
 }
 
 obs_source_t *ViewerState::createLabel(const std::string &text, uint32_t canvasHeight, float scale)
@@ -60,48 +69,7 @@ obs_source_t *ViewerState::createLabel(const std::string &text, uint32_t canvasH
 	return label;
 }
 
-void ViewerState::releaseEntriesLocked()
-{
-	for (auto &entry : scenes_) {
-		obs_weak_source_release(entry.weak);
-		obs_source_release(entry.label);
-	}
-	scenes_.clear();
-}
-
-void ViewerState::releaseFixedLabelsLocked()
-{
-	for (obs_source_t **label : {&programLabel_, &previewLabel_, &onAirLabel_, &recLabel_, &programNameLabel_,
-				     &studioOffLabel_}) {
-		obs_source_release(*label);
-		*label = nullptr;
-	}
-	labelHeightBasis_ = 0;
-}
-
-void ViewerState::rebuildLabelsLocked()
-{
-	const uint32_t h = baseHeight_;
-
-	for (size_t i = 0; i < scenes_.size(); ++i) {
-		obs_source_release(scenes_[i].label);
-		scenes_[i].label = createLabel(std::to_string(i + 1) + "   " + scenes_[i].name, h, kTileLabelScale);
-	}
-
-	releaseFixedLabelsLocked();
-	programLabel_ = createLabel("PROGRAM" + (programName_.empty() ? "" : "  ·  " + programName_), h,
-				    kTileLabelScale);
-	previewLabel_ = createLabel("PREVIEW" + (previewName_.empty() ? "" : "  ·  " + previewName_), h,
-				    kTileLabelScale);
-	onAirLabel_ = createLabel("ON AIR", h, kStatusLabelScale);
-	recLabel_ = createLabel("REC", h, kStatusLabelScale);
-	programNameLabel_ = createLabel("PGM   " + (programName_.empty() ? std::string("—") : programName_), h,
-					kStatusLabelScale);
-	studioOffLabel_ = createLabel("STUDIO MODE OFF", h, kTileLabelScale * 0.8f);
-	labelHeightBasis_ = h;
-}
-
-void ViewerState::setShowingLocked(bool showing)
+void ViewerState::applyShowing(bool showing)
 {
 	// Undo previous marks first; then (re)apply to the current scene list.
 	for (obs_weak_source_t *weak : shown_) {
@@ -118,8 +86,8 @@ void ViewerState::setShowingLocked(bool showing)
 	if (!showing)
 		return;
 
-	for (const auto &entry : scenes_) {
-		obs_source_t *source = obs_weak_source_get_source(entry.weak);
+	for (obs_weak_source_t *weak : sceneWeak_) {
+		obs_source_t *source = obs_weak_source_get_source(weak);
 		if (!source)
 			continue;
 		obs_source_inc_showing(source);
@@ -130,92 +98,139 @@ void ViewerState::setShowingLocked(bool showing)
 
 void ViewerState::refresh()
 {
+	// 1. Read the frontend (no lock held).
 	obs_video_info ovi = {};
-	const bool haveVideo = obs_get_video_info(&ovi);
+	uint32_t width = baseWidth_, height = baseHeight_;
+	if (obs_get_video_info(&ovi) && ovi.base_width > 0 && ovi.base_height > 0) {
+		width = ovi.base_width;
+		height = ovi.base_height;
+	}
 
 	obs_frontend_source_list list = {};
 	obs_frontend_get_scenes(&list);
-
-	std::vector<obs_source_t *> scenes;
 	std::vector<std::string> names;
-	for (size_t i = 0; i < list.sources.num; ++i) {
-		obs_source_t *s = list.sources.array[i];
-		scenes.push_back(s);
-		names.push_back(sourceName(s));
-	}
+	names.reserve(list.sources.num);
+	for (size_t i = 0; i < list.sources.num; ++i)
+		names.push_back(sourceName(list.sources.array[i]));
 
 	const bool studio = obs_frontend_preview_program_mode_active();
 	obs_source_t *program = obs_frontend_get_current_scene();
 	obs_source_t *preview = studio ? obs_frontend_get_current_preview_scene() : obs_source_get_ref(program);
+	const std::string programName = sourceName(program);
+	const std::string previewName = sourceName(preview);
 
 	const bool streaming = obs_frontend_streaming_active();
 	const bool recording = obs_frontend_recording_active();
 	const bool paused = recording && obs_frontend_recording_paused();
 
+	// 2. Work out what changed (main-thread copies, no lock needed).
+	bool listChanged = names.size() != sceneNames_.size();
+	for (size_t i = 0; !listChanged && i < names.size(); ++i)
+		listChanged = names[i] != sceneNames_[i] ||
+			      !obs_weak_source_references_source(sceneWeak_[i], list.sources.array[i]);
+	const bool heightChanged = height != labelHeight_;
+	const bool namesChanged = !haveProgramNames_ || programName != programName_ || previewName != previewName_;
+
+	// 3. Build replacements (no lock held: creating sources may enter graphics).
+	std::vector<RenderScene> newScenes;
+	if (listChanged || heightChanged) {
+		newScenes.reserve(names.size());
+		for (size_t i = 0; i < names.size(); ++i)
+			newScenes.push_back(RenderScene{obs_source_get_weak_source(list.sources.array[i]),
+						       createLabel(std::to_string(i + 1) + "   " + names[i], height,
+								   kTileLabelScale)});
+	}
+
+	Labels newLabels;
+	const bool rebuildNamed = namesChanged || heightChanged;
+	const bool rebuildStatic = heightChanged;
+	if (rebuildNamed) {
+		newLabels.program = createLabel("PROGRAM" + (programName.empty() ? "" : "  ·  " + programName), height,
+						kTileLabelScale);
+		newLabels.preview = createLabel("PREVIEW" + (previewName.empty() ? "" : "  ·  " + previewName), height,
+						kTileLabelScale);
+		newLabels.programName = createLabel(
+			"PGM   " + (programName.empty() ? std::string("—") : programName), height, kStatusLabelScale);
+	}
+	if (rebuildStatic) {
+		newLabels.onAir = createLabel("ON AIR", height, kStatusLabelScale);
+		newLabels.rec = createLabel("REC", height, kStatusLabelScale);
+		newLabels.studioOff = createLabel("STUDIO MODE OFF", height, kTileLabelScale * 0.8f);
+	}
+
+	obs_weak_source_t *newProgram = program ? obs_source_get_weak_source(program) : nullptr;
+	obs_weak_source_t *newPreview = preview ? obs_source_get_weak_source(preview) : nullptr;
+
+	// 4. Swap under the lock; collect what to release afterwards.
+	std::vector<obs_source_t *> oldSources;
+	std::vector<obs_weak_source_t *> oldWeak;
 	{
 		std::lock_guard<std::mutex> lock(mutex_);
 
-		if (haveVideo && ovi.base_width > 0 && ovi.base_height > 0) {
-			baseWidth_ = ovi.base_width;
-			baseHeight_ = ovi.base_height;
-		}
-
-		// Did the scene list change (membership, order or names)?
-		bool listChanged = scenes.size() != scenes_.size();
-		for (size_t i = 0; !listChanged && i < scenes.size(); ++i) {
-			if (names[i] != scenes_[i].name || !obs_weak_source_references_source(scenes_[i].weak, scenes[i]))
-				listChanged = true;
-		}
-
-		if (listChanged) {
-			releaseEntriesLocked();
-			for (size_t i = 0; i < scenes.size(); ++i)
-				scenes_.push_back(SceneEntry{obs_source_get_weak_source(scenes[i]), names[i], nullptr});
-		}
-
-		const std::string programName = sourceName(program);
-		const std::string previewName = sourceName(preview);
-		const bool namesChanged = programName != programName_ || previewName != previewName_;
-		programName_ = programName;
-		previewName_ = previewName;
-
-		setWeak(program_, program);
-		setWeak(preview_, preview);
-
-		if (listChanged || namesChanged || labelHeightBasis_ != baseHeight_ || !programLabel_)
-			rebuildLabelsLocked();
-
-		if (listChanged && showing_)
-			setShowingLocked(true);
-
+		baseWidth_ = width;
+		baseHeight_ = height;
 		studioMode_ = studio;
 		streaming_ = streaming;
 		recording_ = recording;
 		recordingPaused_ = paused;
+
+		oldWeak.push_back(program_);
+		oldWeak.push_back(preview_);
+		program_ = newProgram;
+		preview_ = newPreview;
+
+		if (listChanged || heightChanged) {
+			for (auto &rs : renderScenes_) {
+				oldWeak.push_back(rs.weak);
+				oldSources.push_back(rs.label);
+			}
+			renderScenes_ = std::move(newScenes);
+		}
+		if (rebuildNamed) {
+			oldSources.push_back(std::exchange(labels_.program, newLabels.program));
+			oldSources.push_back(std::exchange(labels_.preview, newLabels.preview));
+			oldSources.push_back(std::exchange(labels_.programName, newLabels.programName));
+		}
+		if (rebuildStatic) {
+			oldSources.push_back(std::exchange(labels_.onAir, newLabels.onAir));
+			oldSources.push_back(std::exchange(labels_.rec, newLabels.rec));
+			oldSources.push_back(std::exchange(labels_.studioOff, newLabels.studioOff));
+		}
 	}
+
+	// 5. Update main-thread bookkeeping and release old objects (no lock held).
+	if (listChanged) {
+		releaseAll(sceneWeak_);
+		for (size_t i = 0; i < list.sources.num; ++i)
+			sceneWeak_.push_back(obs_source_get_weak_source(list.sources.array[i]));
+		sceneNames_ = names;
+	}
+	programName_ = programName;
+	previewName_ = previewName;
+	haveProgramNames_ = true;
+	labelHeight_ = height;
+
+	releaseAll(oldSources);
+	releaseAll(oldWeak);
+
+	if (listChanged && showing_)
+		applyShowing(true);
 
 	obs_source_release(program);
 	obs_source_release(preview);
 	obs_frontend_source_list_free(&list);
 }
 
-void ViewerState::poll()
-{
-	refresh();
-}
-
 void ViewerState::addView()
 {
-	std::lock_guard<std::mutex> lock(mutex_);
 	if (++views_ == 1)
-		setShowingLocked(true);
+		applyShowing(true);
 }
 
 void ViewerState::removeView()
 {
-	std::lock_guard<std::mutex> lock(mutex_);
 	if (views_ > 0 && --views_ == 0)
-		setShowingLocked(false);
+		applyShowing(false);
 }
 
 void ViewerState::setShowLabels(bool show)
@@ -226,17 +241,33 @@ void ViewerState::setShowLabels(bool show)
 
 void ViewerState::clear()
 {
-	std::lock_guard<std::mutex> lock(mutex_);
-	setShowingLocked(false);
-	releaseEntriesLocked();
-	releaseFixedLabelsLocked();
-	obs_weak_source_release(program_);
-	obs_weak_source_release(preview_);
-	program_ = preview_ = nullptr;
+	applyShowing(false);
+
+	std::vector<obs_source_t *> oldSources;
+	std::vector<obs_weak_source_t *> oldWeak;
+	{
+		std::lock_guard<std::mutex> lock(mutex_);
+		for (auto &rs : renderScenes_) {
+			oldWeak.push_back(rs.weak);
+			oldSources.push_back(rs.label);
+		}
+		renderScenes_.clear();
+		oldWeak.push_back(std::exchange(program_, nullptr));
+		oldWeak.push_back(std::exchange(preview_, nullptr));
+		for (obs_source_t **l : {&labels_.program, &labels_.preview, &labels_.onAir, &labels_.rec,
+					 &labels_.programName, &labels_.studioOff})
+			oldSources.push_back(std::exchange(*l, nullptr));
+	}
+
+	releaseAll(oldSources);
+	releaseAll(oldWeak);
+	releaseAll(sceneWeak_);
+	sceneNames_.clear();
 	programName_.clear();
 	previewName_.clear();
-	// Keep views_ so showing resumes when the next scene collection loads.
-	showing_ = false;
+	haveProgramNames_ = false;
+	labelHeight_ = 0;
+	// views_ is kept, so scenes are marked showing again when the next collection loads.
 }
 
 ViewerState::Snapshot ViewerState::acquire()
@@ -246,18 +277,18 @@ ViewerState::Snapshot ViewerState::acquire()
 
 	snap.program = obs_weak_source_get_source(program_);
 	snap.preview = obs_weak_source_get_source(preview_);
-	snap.scenes.reserve(scenes_.size());
-	snap.sceneLabels.reserve(scenes_.size());
-	for (const auto &entry : scenes_) {
-		snap.scenes.push_back(obs_weak_source_get_source(entry.weak));
-		snap.sceneLabels.push_back(obs_source_get_ref(entry.label));
+	snap.scenes.reserve(renderScenes_.size());
+	snap.sceneLabels.reserve(renderScenes_.size());
+	for (const auto &rs : renderScenes_) {
+		snap.scenes.push_back(obs_weak_source_get_source(rs.weak));
+		snap.sceneLabels.push_back(obs_source_get_ref(rs.label));
 	}
-	snap.programLabel = obs_source_get_ref(programLabel_);
-	snap.previewLabel = obs_source_get_ref(previewLabel_);
-	snap.onAirLabel = obs_source_get_ref(onAirLabel_);
-	snap.recLabel = obs_source_get_ref(recLabel_);
-	snap.programNameLabel = obs_source_get_ref(programNameLabel_);
-	snap.studioOffLabel = obs_source_get_ref(studioOffLabel_);
+	snap.programLabel = obs_source_get_ref(labels_.program);
+	snap.previewLabel = obs_source_get_ref(labels_.preview);
+	snap.onAirLabel = obs_source_get_ref(labels_.onAir);
+	snap.recLabel = obs_source_get_ref(labels_.rec);
+	snap.programNameLabel = obs_source_get_ref(labels_.programName);
+	snap.studioOffLabel = obs_source_get_ref(labels_.studioOff);
 	snap.studioMode = studioMode_;
 	snap.streaming = streaming_;
 	snap.recording = recording_;
