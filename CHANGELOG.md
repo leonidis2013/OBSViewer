@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.6.0] — 2026-10-10
+
+Cleaner multiview, a proper window mode, and a channel-strip master bus.
+
+- **Fixed: OBS no longer crashes while scanning plugins.** Each plugin is now checked in a separate helper process. A plugin that crashes or hangs during the scan is skipped and listed as "failed" instead of taking OBS down. "Rescan all" gives failed plugins another try. If OBS ever quits while a plugin is being loaded into the chain, that plugin is skipped next time instead of crashing OBS again.
+- **New default layout, Dynamic:** Preview and Program large on top, every scene in your collection below, arranged to fill the window whatever its shape. Existing setups switch to it once; pick another layout in Settings or by right-clicking.
+- **Names sit just below each view** in a slim band instead of over the picture. A scene on Program gets a red band, one in Preview a green band.
+- **No more toolbar.** Layout and what clicking a view does are in Settings (layout is also in the right-click menu). Small icons at the top of the side bar open Settings, switch window / fullscreen and close.
+- **Window mode:** Tools ▸ OBSViewer ▸ Open Window. It is the same window as fullscreen: the icon (or Esc) switches between the two, so both can never be open at once. Size and position are remembered.
+- **Network moved into the side bar**, under Start stream: upload, 5-minute bitrate history, dropped frames, connection and server. The bottom bar is gone; the loudness history now sits under the audio meter.
+- **No warning borders** around the audio meter or the loudness history. Only the health light flashes, and only for a real problem.
+- **LiveVoice look:** the same palette, panels, section tabs, buttons and zone-coloured meters as LiveVoice, in the multiview, side bar, Settings and Master Bus.
+- **Master Bus redesigned as a vertical channel strip** (LiveProfessor / Waves style): on / off and Inputs at the top, insert slots (click to open, dot to bypass, drag to reorder, right-click to replace or remove), input trim, then an output fader with stereo meters and gain reduction. A searchable plugin browser sits beside it.
+- The output fader goes down to −60 dB.
+
+
 ## [0.5.0] — 2026-10-10
 
 Master bus with VST3 and Audio Unit inserts.

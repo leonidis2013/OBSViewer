@@ -22,22 +22,36 @@ To uninstall, quit OBS and delete
 
 ## Use
 
-- **Dock:** pick a layout from the toolbar, open fullscreen on any screen, or open
-  Settings. Right-click the multiview for the same options.
-- **Fullscreen:** Esc or double-click closes it. Right-click to change layout or move
-  it to another screen.
-- **Tally:** red = on Program, green = on Preview (Studio Mode). Scene tiles show the
-  first scenes in your scene list, in order.
+- **Dock:** Docks ▸ OBSViewer. The icons at the top of the side bar open Settings,
+  open the viewer in a window, or open it fullscreen.
+- **Window or fullscreen:** Tools ▸ OBSViewer ▸ Open Window, or Open Fullscreen ▸
+  *screen*. It's one window: the corner icon (or Esc) switches between windowed and
+  fullscreen, so you never have both. ⌘W or the ✕ icon closes it.
+- **Layouts:** Settings ▸ Window layout / Dock layout, or right-click ▸ Layout.
+  **Dynamic** (the default) puts Preview and Program on top and every scene below,
+  sized to fill the window.
+- **Switching scenes:** click a scene to send it to Preview (or cut to Program; choose
+  in Settings ▸ Clicking a view). Double-click Preview to take it to Program.
+- **Tally:** a red name band = on Program, green = in Preview (Studio Mode).
+- **Side bar:** health and performance lights (click for details), Start stream with
+  upload, bitrate history, dropped frames and connection, Start recording with disk
+  space, and the programme loudness meter with its 5-minute history.
 
 ## Master bus
 
-Tools ▸ OBSViewer ▸ **Master Bus…** (or right-click the multiview).
+Tools ▸ OBSViewer ▸ **Master Bus…** (or right-click the multiview). The window is a
+channel strip, like LiveProfessor or Waves, with a plugin browser beside it.
 
-1. Click **Scan for plugins** once. It finds VST3 and Audio Unit effects on your Mac.
-2. Use **Add plugin** to build your chain (top to bottom). **Edit** opens a plugin's
-   own window. Each slot has on / bypass, input trim, output gain and a meter.
-3. Turn **Master bus on**, then tick the sources that should go through it (or
-   **Route all**).
+1. Click **Scan** once. It finds the VST3 and Audio Unit effects on your Mac. Each
+   plugin is checked in a separate helper, so a plugin that crashes can't take OBS
+   down; it's listed as failed instead.
+2. Build the chain: click an empty slot and pick a plugin, or select one in the
+   browser and click **Insert**. Click a slot to open the plugin, click its dot to
+   bypass it, drag slots to reorder, right-click to replace or remove.
+3. Switch the bus **ON**, then click **Inputs** and tick the sources that should go
+   through it.
+4. Set the **input trim** and the **output fader**; the meters show the output level
+   and how much the chain is reducing.
 
 How it works: ticked sources are moved off your output track (Track 1, what the
 stream and recording send) onto a spare track (Track 6 by default). OBSViewer
