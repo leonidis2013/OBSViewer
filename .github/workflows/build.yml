@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
     inputs:
       release:
-        description: "Publish a release for the version in buildspec.json"
+        description: "Publish (if not already published) the release for the version in buildspec.json"
         type: boolean
         default: false
 
@@ -141,31 +141,36 @@ jobs:
           GH_REPO: ${{ github.repository }}
         run: |
           ls -l dist
-          if [[ "$GITHUB_REF" == refs/tags/v* || "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-            if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
-              TAG="$GITHUB_REF_NAME"
-            else
-              # "Run workflow" with "Publish a release" ticked: tag the current commit.
-              TAG="v$(jq -r .version buildspec.json)"
-              if gh release view "$TAG" >/dev/null 2>&1; then
-                echo "::error title=Release exists::$TAG is already published. Bump the version in buildspec.json first."
-                exit 1
-              fi
-            fi
-            VERSION="${TAG#v}"
-            # Release notes: this version's section of CHANGELOG.md.
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            VERSION="${GITHUB_REF_NAME#v}"
+          else
+            VERSION="$(jq -r .version buildspec.json)"
+          fi
+          TAG="v$VERSION"
+
+          # 1. A numbered release for every new version. This is what the in-plugin
+          #    updater offers, so bumping "version" in buildspec.json on main is all
+          #    it takes to ship an update.
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "$TAG is already published; leaving it as it is."
+          else
             awk -v v="$VERSION" '
               /^## / { if (found) exit; if (index($0, "[" v "]") || index($0, " " v)) { found=1; next } }
               found { print }
             ' CHANGELOG.md > notes.md || true
             if [[ ! -s notes.md ]]; then echo "OBSViewer $VERSION" > notes.md; fi
-            PRE=""
-            if [[ "$VERSION" == *-* ]]; then PRE="--prerelease"; fi
-            gh release create "$TAG" dist/* --target "$GITHUB_SHA" --title "OBSViewer $VERSION" --notes-file notes.md $PRE
-          else
-            # Rolling test build from main. Its tag isn't a version, so the in-plugin updater ignores it.
+            if [[ "$VERSION" == *-* ]]; then
+              gh release create "$TAG" dist/* --target "$GITHUB_SHA" --title "OBSViewer $VERSION" --notes-file notes.md --prerelease
+            else
+              gh release create "$TAG" dist/* --target "$GITHUB_SHA" --title "OBSViewer $VERSION" --notes-file notes.md --latest
+            fi
+            echo "Published $TAG"
+          fi
+
+          # 2. The rolling "Latest build (main)" test build, refreshed on every push to main.
+          if [[ "$GITHUB_REF" == refs/heads/main ]]; then
             gh release delete latest --cleanup-tag --yes 2>/dev/null || true
-            gh release create latest dist/* --target "$GITHUB_SHA" --prerelease \
+            gh release create latest dist/* --target "$GITHUB_SHA" --prerelease --latest=false \
               --title "Latest build (main)" \
-              --notes "Newest build from main (${GITHUB_SHA::7}). macOS universal (Apple Silicon + Intel) installer. For testing; the in-plugin updater only offers tagged releases."
+              --notes "Newest build from main (${GITHUB_SHA::7}), version $VERSION. macOS universal (Apple Silicon + Intel) installer. Numbered releases (v$VERSION etc.) are what the in-plugin updater offers."
           fi
