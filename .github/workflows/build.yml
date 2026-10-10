@@ -59,21 +59,28 @@ jobs:
           restore-keys: macos-deps-
 
       - name: Configure
-        run: cmake --preset macos-ci
+        run: |
+          status=0
+          cmake --preset macos-ci > configure.log 2>&1 || status=$?
+          tail -n 40 configure.log
+          if (( status != 0 )); then .github/scripts/annotate-log.sh configure.log "Configure failed"; fi
+          exit $status
 
       - name: Build
         run: |
           status=0
           cmake --build build_macos --config Release --parallel > build.log 2>&1 || status=$?
           grep -E "error:|warning: |\*\* BUILD" build.log | sort -u | head -200 || true
+          if (( status != 0 )); then .github/scripts/annotate-log.sh build.log "Build failed"; fi
           exit $status
 
-      - name: Show build errors
-        if: failure()
-        run: grep -n -B2 -A6 "error:" build.log | head -300 || true
-
       - name: Install and create the installer package
-        run: cmake --install build_macos --config Release --prefix "$PWD/release/Release"
+        run: |
+          status=0
+          cmake --install build_macos --config Release --prefix "$PWD/release/Release" > install.log 2>&1 || status=$?
+          tail -n 30 install.log
+          if (( status != 0 )); then .github/scripts/annotate-log.sh install.log "Packaging failed"; fi
+          exit $status
 
       - name: Check the plugin
         run: |
