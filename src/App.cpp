@@ -1,6 +1,7 @@
 #include "App.hpp"
 
 #include "core/Settings.hpp"
+#include "metrics/Metrics.hpp"
 #include "ui/FullscreenWindow.hpp"
 #include "ui/Menu.hpp"
 #include "ui/SettingsDialog.hpp"
@@ -64,6 +65,7 @@ void App::shutdown()
 		return;
 
 	obs_frontend_remove_event_callback(&App::onFrontendEvent, this);
+	Metrics::get().stop();
 	if (pollTimer_)
 		pollTimer_->stop();
 	if (updater_)
@@ -86,6 +88,7 @@ void App::handleFrontendEvent(enum obs_frontend_event event)
 	case OBS_FRONTEND_EVENT_FINISHED_LOADING:
 		ViewerState::get().refresh();
 		pollTimer_->start();
+		Metrics::get().start();
 		// Give OBS a moment to settle before talking to the network.
 		QTimer::singleShot(8000, this, [this] {
 			if (!exiting_)
@@ -116,6 +119,7 @@ void App::handleFrontendEvent(enum obs_frontend_event event)
 	case OBS_FRONTEND_EVENT_SCRIPTING_SHUTDOWN:
 	case OBS_FRONTEND_EVENT_EXIT:
 		exiting_ = true;
+		Metrics::get().stop();
 		if (pollTimer_)
 			pollTimer_->stop();
 		if (updater_)
@@ -238,10 +242,14 @@ void App::applySettings()
 {
 	const Settings &s = Settings::get();
 	ViewerState::get().setShowLabels(s.showLabels);
-	if (dock_)
+	if (dock_) {
 		dock_->setLayoutId(s.dockLayout);
-	if (fullscreen_)
+		dock_->applySettings();
+	}
+	if (fullscreen_) {
 		fullscreen_->setLayoutId(s.windowLayout);
+		fullscreen_->applySettings();
+	}
 }
 
 } // namespace obsviewer

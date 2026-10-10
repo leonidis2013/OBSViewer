@@ -1,6 +1,7 @@
 #include "ui/SettingsDialog.hpp"
 
 #include "App.hpp"
+#include "audio/meters/LoudnessPresets.h"
 #include "core/Settings.hpp"
 #include "ui/Theme.hpp"
 #include "update/Keychain.hpp"
@@ -12,6 +13,7 @@
 #include <QCheckBox>
 #include <QComboBox>
 #include <QDialogButtonBox>
+#include <QDoubleSpinBox>
 #include <QFormLayout>
 #include <QGroupBox>
 #include <QHBoxLayout>
@@ -19,6 +21,8 @@
 #include <QLineEdit>
 #include <QPushButton>
 #include <QVBoxLayout>
+
+#include <algorithm>
 
 namespace obsviewer {
 
@@ -56,6 +60,45 @@ SettingsDialog::SettingsDialog(QWidget *parent) : QDialog(parent)
 	viewForm->addRow(tr("Dock layout"), dockLayout_);
 	viewForm->addRow(tr("Fullscreen layout"), windowLayout_);
 	viewForm->addRow(QString(), showLabels_);
+	showSidebar_ = new QCheckBox(tr("Show the side bar (stream, record, audio, health)"), viewGroup);
+	showNetbar_ = new QCheckBox(tr("Show the network bar"), viewGroup);
+	alarms_ = new QCheckBox(tr("Flash sections that need attention"), viewGroup);
+	viewForm->addRow(QString(), showSidebar_);
+	viewForm->addRow(QString(), showNetbar_);
+	viewForm->addRow(QString(), alarms_);
+
+	// ---- Audio ----
+	auto *audioGroup = new QGroupBox(tr("AUDIO"), this);
+	auto *audioForm = new QFormLayout(audioGroup);
+	loudnessPreset_ = new QComboBox(audioGroup);
+	for (int i = 0; i < bm::kNumLoudnessPresets; ++i) {
+		const auto &preset = bm::kLoudnessPresets[i];
+		loudnessPreset_->addItem(i == bm::kCustomPresetIndex
+						 ? QString::fromUtf8(preset.name)
+						 : QStringLiteral("%1  (%2 LUFS, %3 dBTP)")
+							   .arg(QString::fromUtf8(preset.name))
+							   .arg(preset.targetLufs, 0, 'f', 0)
+							   .arg(preset.ceilingDbtp, 0, 'f', 0));
+	}
+	customTarget_ = new QDoubleSpinBox(audioGroup);
+	customTarget_->setRange(-36.0, -6.0);
+	customTarget_->setSingleStep(0.5);
+	customTarget_->setDecimals(1);
+	customTarget_->setSuffix(QStringLiteral(" LUFS"));
+	audioTrack_ = new QComboBox(audioGroup);
+	for (int t = 1; t <= 6; ++t)
+		audioTrack_->addItem(tr("Track %1").arg(t), t);
+	auto *audioHelp = new QLabel(tr("The meter measures this OBS audio track. Use the track your stream sends "
+					"(Settings ▸ Output ▸ Streaming ▸ Audio Track; Track 1 by default)."),
+				     audioGroup);
+	audioHelp->setWordWrap(true);
+	audioHelp->setProperty("dim", true);
+	audioForm->addRow(tr("Loudness target"), loudnessPreset_);
+	audioForm->addRow(tr("Custom target"), customTarget_);
+	audioForm->addRow(tr("Measure"), audioTrack_);
+	audioForm->addRow(QString(), audioHelp);
+	connect(loudnessPreset_, &QComboBox::currentIndexChanged, this,
+		[this](int index) { customTarget_->setEnabled(index == bm::kCustomPresetIndex); });
 
 	// ---- Updates ----
 	auto *updateGroup = new QGroupBox(tr("UPDATES"), this);
@@ -104,6 +147,7 @@ SettingsDialog::SettingsDialog(QWidget *parent) : QDialog(parent)
 	layout->setContentsMargins(18, 16, 18, 16);
 	layout->setSpacing(12);
 	layout->addWidget(viewGroup);
+	layout->addWidget(audioGroup);
 	layout->addWidget(updateGroup);
 	layout->addWidget(buttons);
 
@@ -131,6 +175,13 @@ void SettingsDialog::load()
 	selectData(dockLayout_, s.dockLayout);
 	selectData(windowLayout_, s.windowLayout);
 	showLabels_->setChecked(s.showLabels);
+	showSidebar_->setChecked(s.showSidebar);
+	showNetbar_->setChecked(s.showNetbar);
+	alarms_->setChecked(s.alarms);
+	loudnessPreset_->setCurrentIndex(std::clamp(s.loudnessPreset, 0, bm::kNumLoudnessPresets - 1));
+	customTarget_->setValue(s.customTargetLufs);
+	customTarget_->setEnabled(loudnessPreset_->currentIndex() == bm::kCustomPresetIndex);
+	audioTrack_->setCurrentIndex(std::clamp(s.audioTrack, 1, 6) - 1);
 	autoCheck_->setChecked(s.updateAutoCheck);
 	prereleases_->setChecked(s.updateIncludePrereleases);
 	repo_->setText(QString::fromStdString(s.updateRepo));
@@ -150,6 +201,12 @@ void SettingsDialog::apply()
 	s.dockLayout = dockLayout_->currentData().toString().toStdString();
 	s.windowLayout = windowLayout_->currentData().toString().toStdString();
 	s.showLabels = showLabels_->isChecked();
+	s.showSidebar = showSidebar_->isChecked();
+	s.showNetbar = showNetbar_->isChecked();
+	s.alarms = alarms_->isChecked();
+	s.loudnessPreset = loudnessPreset_->currentIndex();
+	s.customTargetLufs = static_cast<float>(customTarget_->value());
+	s.audioTrack = audioTrack_->currentData().toInt();
 	s.updateAutoCheck = autoCheck_->isChecked();
 	s.updateIncludePrereleases = prereleases_->isChecked();
 

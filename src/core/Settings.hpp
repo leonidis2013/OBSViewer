@@ -14,6 +14,16 @@ struct Settings {
 	bool showLabels = true;
 	bool clickToSwitch = false;
 
+	// Bars around the multiview
+	bool showSidebar = true; // stream / record / audio / health on the right
+	bool showNetbar = true;  // network and loudness history along the bottom
+	bool alarms = true;      // flash sections that need attention
+
+	// Audio
+	int loudnessPreset = 0;          // index into bm::kLoudnessPresets (0 = YouTube, -14 LUFS)
+	float customTargetLufs = -16.0f; // used when the preset is "Custom"
+	int audioTrack = 1;              // OBS mix track to measure (1-6)
+
 	bool updateAutoCheck = true;
 	bool updateIncludePrereleases = false;
 	std::string updateRepo = "leonidis2013/OBSViewer";

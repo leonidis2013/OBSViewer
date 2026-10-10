@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.2.0] — 2026-10-10
+
+New layout with stream, network and audio monitoring.
+
+- Slimmer look: 1-pixel tile borders, 2-pixel tally borders, narrow gaps and smaller labels. Layouts now fill the space instead of leaving room for the old status strip.
+- Right-hand side bar:
+  - Health light. Click it to see every check (stream, network, encoder, rendering, CPU, disk, loudness, peaks, silence) with its status.
+  - Start / stop stream and recording, with status and running time. Stopping asks first.
+  - Programme audio meter: left / right peak, short-term loudness against your target band, integrated loudness, true-peak max. Click the meter to reset.
+- Bottom network bar: upload rate, 5-minute bitrate history (amber / red where frames dropped or the stream reconnected), dropped frames (network, encoder, render), connection state, uptime and server load, and a 5-minute loudness history against the target.
+- Alarms: sections flash amber or red when they need attention (dropped frames, reconnects, overload, low disk, clipping, silence).
+- Settings: loudness target presets (YouTube −14, Apple −16, EBU R128 −23, ATSC −24 and more, same list as BroadcastMaster), which audio track to measure, and switches for the side bar, network bar and alarms.
+
 ## [0.1.1] — 2026-10-10
 
 Fixes from the first test on macOS.

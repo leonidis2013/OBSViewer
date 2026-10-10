@@ -49,6 +49,19 @@ void Settings::load()
 	windowScreen = getString(data, "window_screen", defaults.windowScreen);
 	showLabels = getBool(data, "show_labels", defaults.showLabels);
 	clickToSwitch = getBool(data, "click_to_switch", defaults.clickToSwitch);
+	showSidebar = getBool(data, "show_sidebar", defaults.showSidebar);
+	showNetbar = getBool(data, "show_netbar", defaults.showNetbar);
+	alarms = getBool(data, "alarms", defaults.alarms);
+	loudnessPreset = obs_data_has_user_value(data, "loudness_preset")
+				 ? static_cast<int>(obs_data_get_int(data, "loudness_preset"))
+				 : defaults.loudnessPreset;
+	customTargetLufs = obs_data_has_user_value(data, "custom_target_lufs")
+				   ? static_cast<float>(obs_data_get_double(data, "custom_target_lufs"))
+				   : defaults.customTargetLufs;
+	audioTrack = obs_data_has_user_value(data, "audio_track") ? static_cast<int>(obs_data_get_int(data, "audio_track"))
+								   : defaults.audioTrack;
+	if (audioTrack < 1 || audioTrack > 6)
+		audioTrack = 1;
 	updateAutoCheck = getBool(data, "update_auto_check", defaults.updateAutoCheck);
 	updateIncludePrereleases = getBool(data, "update_include_prereleases", defaults.updateIncludePrereleases);
 	updateRepo = getString(data, "update_repo", defaults.updateRepo);
@@ -79,6 +92,12 @@ void Settings::save() const
 	obs_data_set_string(data, "window_screen", windowScreen.c_str());
 	obs_data_set_bool(data, "show_labels", showLabels);
 	obs_data_set_bool(data, "click_to_switch", clickToSwitch);
+	obs_data_set_bool(data, "show_sidebar", showSidebar);
+	obs_data_set_bool(data, "show_netbar", showNetbar);
+	obs_data_set_bool(data, "alarms", alarms);
+	obs_data_set_int(data, "loudness_preset", loudnessPreset);
+	obs_data_set_double(data, "custom_target_lufs", customTargetLufs);
+	obs_data_set_int(data, "audio_track", audioTrack);
 	obs_data_set_bool(data, "update_auto_check", updateAutoCheck);
 	obs_data_set_bool(data, "update_include_prereleases", updateIncludePrereleases);
 	obs_data_set_string(data, "update_repo", updateRepo.c_str());

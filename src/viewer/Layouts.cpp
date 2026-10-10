@@ -1,5 +1,7 @@
 #include "viewer/Layouts.hpp"
 
+#include <algorithm>
+
 namespace obsviewer {
 
 namespace {
@@ -21,12 +23,11 @@ Tile scene(int index, float x, float y, float s)
 
 Layout makeAtem()
 {
-	Layout l{"atem", "ATEM (2 + 4 + status)", {}};
+	Layout l{"atem", "ATEM (2 + 4)", {}};
 	l.tiles.push_back(preview(0.0f, 0.0f, 0.5f));
 	l.tiles.push_back(program(0.5f, 0.0f, 0.5f));
 	for (int i = 0; i < 4; ++i)
 		l.tiles.push_back(scene(i, 0.25f * i, 0.5f, 0.25f));
-	l.tiles.push_back(Tile{TileKind::Status, -1, {0.0f, 0.75f, 1.0f, 0.25f}});
 	return l;
 }
 
@@ -62,6 +63,18 @@ Layout makeGrid(const char *id, const char *name, int n)
 }
 
 } // namespace
+
+NRect Layout::bounds() const
+{
+	NRect b{0, 0, 0, 0};
+	for (const auto &t : tiles) {
+		b.w = std::max(b.w, t.rect.x + t.rect.w);
+		b.h = std::max(b.h, t.rect.y + t.rect.h);
+	}
+	if (b.w <= 0 || b.h <= 0)
+		b = NRect{0, 0, 1, 1};
+	return b;
+}
 
 int Layout::sceneTileCount() const
 {

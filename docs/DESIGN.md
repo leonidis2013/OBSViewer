@@ -139,6 +139,52 @@ adds program loudness.
 
 ---
 
+## 4b. Monitoring bars (0.2.0)
+
+The multiview is surrounded by two Qt-drawn bars (crisp text, clickable controls),
+shown in both the dock (compact) and the fullscreen window.
+
+**Side bar (right)**
+- Health light — overall Good / Warning / Problem. Click to replace the bar with the
+  full list of checks; click again to return.
+- Stream — Start stream / ON AIR hh:mm:ss / Reconnecting…; bitrate, % dropped,
+  reconnects. Stopping asks for confirmation.
+- Record — Start recording / REC hh:mm:ss / PAUSED; free disk space and hours left
+  at the current recording bitrate. Stopping asks for confirmation.
+- Programme audio — L/R sample peak (dBFS) with the true-peak ceiling marked;
+  short-term loudness bar coloured against the target band (blue below, green on
+  target, amber/red above); integrated LUFS, true-peak max, target name. Click to
+  reset integrated and peak hold. Measures one OBS mix track (Track 1 by default)
+  with the BS.1770 meter shared with BroadcastMaster.
+
+**Network bar (bottom)**
+- Upload — current stream bitrate to the server (Mbps).
+- Bitrate · last 5 min — one bar per second; green normal, amber dropped frames,
+  red heavy drops or reconnecting; dashed average line.
+- Dropped — network, encoder (skipped) and render (lagged) frame counts.
+- Connection — connected / reconnects / reconnecting, uptime, connect time and
+  server load (congestion).
+- Loudness · last 5 min — short-term LUFS line against the target ±tolerance band.
+
+Note: "Upload" is what OBS is sending, not a speed test of the internet line.
+
+**Health checks and thresholds**
+
+| Check | Warning | Problem |
+|---|---|---|
+| Stream | a past reconnect | reconnecting now |
+| Network | any drop in last 10 s, or ≥ 0.5 % overall | ≥ 30 drops in 10 s, or ≥ 2 % overall |
+| Encoder | ≥ 0.5 % skipped (10 s) | ≥ 5 % |
+| Rendering | ≥ 1 % lagged (10 s) | ≥ 5 % |
+| CPU | ≥ 75 % | ≥ 90 % |
+| Disk | < 20 GB free or < 3 h left | < 5 GB free or < 1 h left |
+| Loudness | outside target ± tolerance | more than tolerance + 3 LU too loud |
+| Peaks | above the true-peak ceiling | above 0 dBTP (clipping) |
+| Silence | silent ≥ 10 s while not live | silent ≥ 10 s while live |
+
+Sections pulse amber or red for their checks (Settings ▸ "Flash sections that need
+attention"). Loudness simply drifting off target is shown but doesn't flash.
+
 ## 5. Settings
 
 Stored as JSON in `~/Library/Application Support/obs-studio/plugin_config/obsviewer/config.json`.
@@ -150,6 +196,12 @@ Stored as JSON in `~/Library/Application Support/obs-studio/plugin_config/obsvie
 | `window_screen` | primary | Screen name for the fullscreen window. |
 | `show_labels` | `true` | Draw tile labels. |
 | `click_to_switch` | `false` | Tile click actions (stage 4). |
+| `show_sidebar` | `true` | Right-hand side bar. |
+| `show_netbar` | `true` | Bottom network bar. |
+| `alarms` | `true` | Flash sections that need attention. |
+| `loudness_preset` | `0` (YouTube −14) | Loudness target preset. |
+| `custom_target_lufs` | `-16` | Target when the preset is Custom. |
+| `audio_track` | `1` | OBS mix track the meter measures. |
 | `update_auto_check` | `true` | Check for updates when OBS starts (at most once every 12 h). |
 | `update_repo` | `leonidis2013/OBSViewer` | GitHub repository releases come from. |
 | `update_include_prereleases` | `false` | Also offer beta / rc releases. |

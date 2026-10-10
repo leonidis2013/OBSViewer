@@ -18,11 +18,11 @@ struct Rect {
 	float x, y, w, h;
 };
 
-// Maps canvas coordinates (0..fw, 0..fh) to window pixels.
+// Maps canvas coordinates to window pixels.
 struct Frame {
-	float fw = 1920, fh = 1080; // canvas size
-	float ox = 0, oy = 0;       // window offset of the letterboxed canvas
-	float scale = 1;            // canvas → pixels
+	float fw = 1920, fh = 1080; // canvas size (OBS base resolution)
+	float ox = 0, oy = 0;       // window offset of the letterboxed multiview
+	float scale = 1;            // canvas units → window pixels
 };
 
 void startRegion(int vx, int vy, int vcx, int vcy, float left, float right, float top, float bottom)
@@ -47,14 +47,17 @@ void drawBox(float x, float y, float w, float h, uint32_t argb)
 	gs_eparam_t *color = gs_effect_get_param_by_name(solid, "color");
 	gs_effect_set_color(color, argb);
 
+	// gs_draw_sprite takes whole units; scale a 1×1 sprite instead so hairlines
+	// a fraction of a canvas unit wide still draw at their true size.
 	gs_matrix_push();
 	gs_matrix_translate3f(x, y, 0.0f);
+	gs_matrix_scale3f(w, h, 1.0f);
 	while (gs_effect_loop(solid, "Solid"))
-		gs_draw_sprite(nullptr, 0, static_cast<uint32_t>(std::lround(w)), static_cast<uint32_t>(std::lround(h)));
+		gs_draw_sprite(nullptr, 0, 1, 1);
 	gs_matrix_pop();
 }
 
-// Outline of a rectangle, drawn inside its edge.
+// Outline drawn inside the rect's edge.
 void drawFrame(const Rect &r, float t, uint32_t argb)
 {
 	drawBox(r.x, r.y, r.w, t, argb);
@@ -82,10 +85,10 @@ Rect fitAspect(const Rect &r, float aspect)
 // Render something drawn in canvas space (0..fw, 0..fh) into rect r.
 template<typename Fn> void renderScaled(const Frame &f, const Rect &r, Fn &&draw)
 {
-	const int vx = static_cast<int>(f.ox + r.x * f.scale);
-	const int vy = static_cast<int>(f.oy + r.y * f.scale);
-	const int vcx = static_cast<int>(r.w * f.scale);
-	const int vcy = static_cast<int>(r.h * f.scale);
+	const int vx = static_cast<int>(std::lround(f.ox + r.x * f.scale));
+	const int vy = static_cast<int>(std::lround(f.oy + r.y * f.scale));
+	const int vcx = static_cast<int>(std::lround(r.w * f.scale));
+	const int vcy = static_cast<int>(std::lround(r.h * f.scale));
 	if (vcx <= 0 || vcy <= 0)
 		return;
 	startRegion(vx, vy, vcx, vcy, 0.0f, f.fw, 0.0f, f.fh);
@@ -93,15 +96,14 @@ template<typename Fn> void renderScaled(const Frame &f, const Rect &r, Fn &&draw
 	endRegion();
 }
 
-// Draws a text label at (x, y) scaled by s, on a translucent plate.
-void drawLabelAt(obs_source_t *label, float x, float y, float s, uint32_t plate)
+void drawLabelAt(obs_source_t *label, float x, float y, float s, uint32_t plate, float padX)
 {
 	const float lw = static_cast<float>(obs_source_get_width(label)) * s;
 	const float lh = static_cast<float>(obs_source_get_height(label)) * s;
 	if (lw <= 0.0f || lh <= 0.0f)
 		return;
 	if (plate)
-		drawBox(x, y, lw, lh, plate);
+		drawBox(x - padX, y, lw + 2 * padX, lh, plate);
 	gs_matrix_push();
 	gs_matrix_translate3f(x, y, 0.0f);
 	gs_matrix_scale3f(s, s, 1.0f);
@@ -109,8 +111,8 @@ void drawLabelAt(obs_source_t *label, float x, float y, float s, uint32_t plate)
 	gs_matrix_pop();
 }
 
-// Bottom-centre label inside tile rect r (ATEM style).
-void drawTileLabel(obs_source_t *label, const Rect &r, float pad)
+// Bottom-centre label inside the picture (ATEM style), sized to the tile.
+void drawTileLabel(obs_source_t *label, const Rect &r, float pad, float maxHeight)
 {
 	if (!label)
 		return;
@@ -118,14 +120,14 @@ void drawTileLabel(obs_source_t *label, const Rect &r, float pad)
 	const float lh = static_cast<float>(obs_source_get_height(label));
 	if (lw <= 0.0f || lh <= 0.0f)
 		return;
-	const float s = std::min({1.0f, (r.w - 2 * pad) / lw, (r.h * 0.3f) / lh});
+	const float s = std::min({1.0f, (r.w - 4 * pad) / lw, maxHeight / lh});
 	const float x = r.x + (r.w - lw * s) / 2;
 	const float y = r.y + r.h - lh * s - pad;
-	drawLabelAt(label, x, y, s, theme::kLabelPlate);
+	drawLabelAt(label, x, y, s, theme::kLabelPlate, pad * 0.6f);
 }
 
-// Top-left note inside tile rect r.
-void drawTileNote(obs_source_t *label, const Rect &r, float pad)
+// Top-left note inside the picture.
+void drawTileNote(obs_source_t *label, const Rect &r, float pad, float maxHeight)
 {
 	if (!label)
 		return;
@@ -133,26 +135,8 @@ void drawTileNote(obs_source_t *label, const Rect &r, float pad)
 	const float lh = static_cast<float>(obs_source_get_height(label));
 	if (lw <= 0.0f || lh <= 0.0f)
 		return;
-	const float s = std::min(1.0f, (r.w - 2 * pad) / lw);
-	drawLabelAt(label, r.x + pad, r.y + pad, s, theme::kLabelPlate);
-}
-
-// A status "lamp": coloured box with a centred label. Returns its width.
-float drawLamp(obs_source_t *label, float x, float y, float h, uint32_t fill, uint32_t edge, float t)
-{
-	if (!label)
-		return 0.0f;
-	const float lw = static_cast<float>(obs_source_get_width(label));
-	const float lh = static_cast<float>(obs_source_get_height(label));
-	if (lw <= 0.0f || lh <= 0.0f)
-		return 0.0f;
-	const float s = std::min(1.0f, (h * 0.7f) / lh);
-	const float padX = h * 0.35f;
-	const float w = lw * s + 2 * padX;
-	drawBox(x, y, w, h, fill);
-	drawFrame(Rect{x, y, w, h}, t, edge);
-	drawLabelAt(label, x + padX, y + (h - lh * s) / 2, s, 0);
-	return w;
+	const float s = std::min({1.0f, (r.w - 4 * pad) / lw, maxHeight / lh});
+	drawLabelAt(label, r.x + pad * 1.6f, r.y + pad, s, theme::kLabelPlate, pad * 0.6f);
 }
 
 } // namespace
@@ -169,60 +153,37 @@ void Renderer::render(const Layout &layout, uint32_t cx, uint32_t cy)
 	f.fh = static_cast<float>(snap.baseHeight);
 	const float aspect = f.fw / f.fh;
 
-	// Letterbox the whole multiview to the canvas aspect ratio.
+	// Fit the area the tiles cover (not the whole canvas) into the window.
+	const NRect b = layout.bounds();
+	const float areaW = f.fw * b.w, areaH = f.fh * b.h;
 	const float windowAspect = static_cast<float>(cx) / static_cast<float>(cy);
-	if (windowAspect > aspect) {
-		f.scale = static_cast<float>(cy) / f.fh;
-		f.ox = (static_cast<float>(cx) - f.fw * f.scale) / 2;
+	if (windowAspect > areaW / areaH) {
+		f.scale = static_cast<float>(cy) / areaH;
+		f.ox = (static_cast<float>(cx) - areaW * f.scale) / 2;
 	} else {
-		f.scale = static_cast<float>(cx) / f.fw;
-		f.oy = (static_cast<float>(cy) - f.fh * f.scale) / 2;
+		f.scale = static_cast<float>(cx) / areaW;
+		f.oy = (static_cast<float>(cy) - areaH * f.scale) / 2;
 	}
 
-	const float thin = std::max(2.0f, f.fh * 0.003f);
-	const float thick = thin * 2.5f;
-	const float pad = f.fh * 0.012f;
+	// Line weights in window pixels, converted to canvas units.
+	const float px = 1.0f / f.scale;
+	const float hair = 1.0f * px;  // idle border
+	const float tally = 2.0f * px; // program / preview border
+	const float gutter = 3.0f * px;
+	const float pad = std::max(4.0f * px, f.fh * 0.008f);
 
-	startRegion(static_cast<int>(f.ox), static_cast<int>(f.oy), static_cast<int>(f.fw * f.scale),
-		    static_cast<int>(f.fh * f.scale), 0.0f, f.fw, 0.0f, f.fh);
+	startRegion(static_cast<int>(std::lround(f.ox)), static_cast<int>(std::lround(f.oy)),
+		    static_cast<int>(std::lround(areaW * f.scale)), static_cast<int>(std::lround(areaH * f.scale)), 0.0f,
+		    areaW, 0.0f, areaH);
 
-	drawBox(0, 0, f.fw, f.fh, theme::kBg);
+	drawBox(0, 0, areaW, areaH, theme::kBg);
 
 	for (const Tile &tile : layout.tiles) {
+		if (tile.kind == TileKind::Status)
+			continue; // status now lives in the side bar
+
 		const Rect cell{tile.rect.x * f.fw, tile.rect.y * f.fh, tile.rect.w * f.fw, tile.rect.h * f.fh};
-		const Rect r = inset(cell, thin * 0.5f); // small gutter between tiles
-
-		if (tile.kind == TileKind::Status) {
-			drawBox(r.x, r.y, r.w, r.h, theme::kPanel);
-			drawFrame(r, thin, theme::kBorder);
-
-			const float lampH = r.h * 0.42f;
-			const float y = r.y + (r.h - lampH) / 2;
-			float x = r.x + pad * 2;
-
-			const uint32_t onAirFill = snap.streaming ? theme::kBad : theme::kPanelRaised;
-			x += drawLamp(snap.onAirLabel, x, y, lampH, onAirFill, snap.streaming ? theme::kBad : theme::kBorder,
-				      thin) +
-			     pad * 1.5f;
-
-			uint32_t recFill = theme::kPanelRaised, recEdge = theme::kBorder;
-			if (snap.recording) {
-				recFill = snap.recordingPaused ? theme::kWarn : theme::kBad;
-				recEdge = recFill;
-			}
-			x += drawLamp(snap.recLabel, x, y, lampH, recFill, recEdge, thin) + pad * 3;
-
-			if (snap.programNameLabel) {
-				const float lh = static_cast<float>(obs_source_get_height(snap.programNameLabel));
-				const float lw = static_cast<float>(obs_source_get_width(snap.programNameLabel));
-				if (lh > 0 && lw > 0) {
-					const float s = std::min({1.0f, (lampH * 0.8f) / lh, (r.x + r.w - pad - x) / lw});
-					if (s > 0)
-						drawLabelAt(snap.programNameLabel, x, r.y + (r.h - lh * s) / 2, s, 0);
-				}
-			}
-			continue;
-		}
+		const Rect r = inset(cell, gutter / 2);
 
 		obs_source_t *source = nullptr;
 		obs_source_t *label = nullptr;
@@ -242,8 +203,8 @@ void Renderer::render(const Layout &layout, uint32_t cx, uint32_t cy)
 		case TileKind::Preview:
 			source = snap.preview;
 			label = snap.previewLabel;
-			edge = theme::kGood;
-			active = true;
+			edge = snap.studioMode ? theme::kGood : theme::kBorder;
+			active = snap.studioMode;
 			previewFallback = !snap.studioMode;
 			break;
 		case TileKind::Scene:
@@ -263,25 +224,24 @@ void Renderer::render(const Layout &layout, uint32_t cx, uint32_t cy)
 			break;
 		}
 
-		const float t = active ? thick : thin;
-		drawBox(r.x, r.y, r.w, r.h, theme::kBlack);
+		const float t = active ? tally : hair;
 		const Rect inner = inset(r, t);
+		drawBox(inner.x, inner.y, inner.w, inner.h, (source || isProgram) ? theme::kBlack : theme::kPanel);
 		const Rect picture = fitAspect(inner, aspect);
 
-		if (isProgram) {
+		if (isProgram)
 			renderScaled(f, picture, [] { obs_render_main_texture(); });
-		} else if (source) {
+		else if (source)
 			renderScaled(f, picture, [source] { obs_source_video_render(source); });
-		} else {
-			drawBox(inner.x, inner.y, inner.w, inner.h, theme::kPanel);
-		}
 
 		drawFrame(r, t, edge);
 
 		if (snap.showLabels) {
-			drawTileLabel(label, inner, pad);
+			// Label height tracks the tile so small tiles get small labels.
+			const float maxLabel = std::max(10.0f * px, inner.h * 0.11f);
+			drawTileLabel(label, inner, pad, maxLabel);
 			if (previewFallback)
-				drawTileNote(snap.studioOffLabel, inner, pad);
+				drawTileNote(snap.studioOffLabel, inner, pad, maxLabel * 0.8f);
 		}
 	}
 

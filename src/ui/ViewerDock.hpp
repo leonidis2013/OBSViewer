@@ -9,6 +9,7 @@ class QToolButton;
 
 namespace obsviewer {
 
+class MultiviewPanel;
 class ViewerDisplay;
 
 // Contents of the "OBSViewer" dock: a slim toolbar above a multiview display.
@@ -19,11 +20,13 @@ public:
 	explicit ViewerDock(QWidget *parent = nullptr);
 
 	void setLayoutId(const std::string &id);
+	void applySettings();
 
 private:
 	void onLayoutPicked(int index);
 	void showContextMenu(const QPoint &globalPos);
 
+	MultiviewPanel *panel_ = nullptr;
 	ViewerDisplay *display_ = nullptr;
 	QComboBox *layoutBox_ = nullptr;
 	QToolButton *fullscreenButton_ = nullptr;

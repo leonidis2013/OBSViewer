@@ -3,6 +3,7 @@
 #include "App.hpp"
 #include "core/Settings.hpp"
 #include "ui/Menu.hpp"
+#include "ui/MultiviewPanel.hpp"
 #include "ui/Theme.hpp"
 #include "ui/ViewerDisplay.hpp"
 #include "viewer/Layouts.hpp"
@@ -57,16 +58,17 @@ ViewerDock::ViewerDock(QWidget *parent) : QWidget(parent)
 	bar->addWidget(fullscreenButton_);
 	bar->addWidget(settingsButton_);
 
-	display_ = new ViewerDisplay(this);
+	panel_ = new MultiviewPanel(true, this);
+	display_ = panel_->display();
 	connect(display_, &ViewerDisplay::contextMenuRequested, this, &ViewerDock::showContextMenu);
 
 	auto *layout = new QVBoxLayout(this);
 	layout->setContentsMargins(0, 0, 0, 0);
 	layout->setSpacing(0);
 	layout->addWidget(toolbar);
-	layout->addWidget(display_, 1);
+	layout->addWidget(panel_, 1);
 
-	setMinimumSize(240, 170);
+	setMinimumSize(420, 260);
 	setLayoutId(Settings::get().dockLayout);
 }
 
@@ -79,6 +81,11 @@ void ViewerDock::setLayoutId(const std::string &id)
 		const QSignalBlocker block(layoutBox_);
 		layoutBox_->setCurrentIndex(index);
 	}
+}
+
+void ViewerDock::applySettings()
+{
+	panel_->applySettings();
 }
 
 void ViewerDock::onLayoutPicked(int index)

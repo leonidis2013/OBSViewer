@@ -3,6 +3,7 @@
 #include "App.hpp"
 #include "core/Settings.hpp"
 #include "ui/Menu.hpp"
+#include "ui/MultiviewPanel.hpp"
 #include "ui/Theme.hpp"
 #include "ui/ViewerDisplay.hpp"
 
@@ -28,13 +29,14 @@ FullscreenWindow::FullscreenWindow(QWidget *parent) : QWidget(parent, Qt::Window
 	setAttribute(Qt::WA_QuitOnClose, false); // closing it must never quit OBS
 	setFocusPolicy(Qt::StrongFocus);
 
-	display_ = new ViewerDisplay(this);
+	panel_ = new MultiviewPanel(false, this);
+	display_ = panel_->display();
 	connect(display_, &ViewerDisplay::doubleClicked, this, &QWidget::close);
 	connect(display_, &ViewerDisplay::contextMenuRequested, this, &FullscreenWindow::showContextMenu);
 
 	auto *layout = new QVBoxLayout(this);
 	layout->setContentsMargins(0, 0, 0, 0);
-	layout->addWidget(display_);
+	layout->addWidget(panel_);
 
 	// Esc closes, even when the native video view has keyboard focus.
 	auto *escape = new QAction(this);
@@ -47,6 +49,11 @@ FullscreenWindow::FullscreenWindow(QWidget *parent) : QWidget(parent, Qt::Window
 void FullscreenWindow::setLayoutId(const std::string &id)
 {
 	display_->setLayoutId(id);
+}
+
+void FullscreenWindow::applySettings()
+{
+	panel_->applySettings();
 }
 
 void FullscreenWindow::showOnScreen(QScreen *screen)

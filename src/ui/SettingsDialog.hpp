@@ -3,6 +3,7 @@
 #include <QDialog>
 
 class QCheckBox;
+class QDoubleSpinBox;
 class QComboBox;
 class QLabel;
 class QLineEdit;
@@ -23,6 +24,13 @@ private:
 	QComboBox *dockLayout_ = nullptr;
 	QComboBox *windowLayout_ = nullptr;
 	QCheckBox *showLabels_ = nullptr;
+	QCheckBox *showSidebar_ = nullptr;
+	QCheckBox *showNetbar_ = nullptr;
+	QCheckBox *alarms_ = nullptr;
+
+	QComboBox *loudnessPreset_ = nullptr;
+	QDoubleSpinBox *customTarget_ = nullptr;
+	QComboBox *audioTrack_ = nullptr;
 
 	QCheckBox *autoCheck_ = nullptr;
 	QCheckBox *prereleases_ = nullptr;

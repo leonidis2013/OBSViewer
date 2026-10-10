@@ -25,6 +25,8 @@ struct Layout {
 	std::vector<Tile> tiles;
 
 	int sceneTileCount() const;
+	// Area the tiles actually cover (from 0,0), so short layouts don't waste space.
+	NRect bounds() const;
 };
 
 const std::vector<Layout> &allLayouts();

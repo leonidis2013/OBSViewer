@@ -51,6 +51,18 @@ target_sources(
     src/plugin-main.cpp
     src/App.cpp
     src/App.hpp
+    src/audio/ProgramLoudness.cpp
+    src/audio/ProgramLoudness.hpp
+    src/audio/meters/Biquad.h
+    src/audio/meters/LoudnessMeter.h
+    src/audio/meters/LoudnessPresets.h
+    src/audio/meters/TpFilter.h
+    src/audio/meters/TruePeakMeter.h
+    src/core/Health.cpp
+    src/core/Health.hpp
+    src/core/History.hpp
+    src/metrics/Metrics.cpp
+    src/metrics/Metrics.hpp
     src/core/Settings.cpp
     src/core/Settings.hpp
     src/core/Version.cpp
@@ -71,6 +83,13 @@ target_sources(
     src/ui/FullscreenWindow.hpp
     src/ui/SettingsDialog.cpp
     src/ui/SettingsDialog.hpp
+    src/ui/MultiviewPanel.cpp
+    src/ui/MultiviewPanel.hpp
+    src/ui/NetworkBar.cpp
+    src/ui/NetworkBar.hpp
+    src/ui/Paint.hpp
+    src/ui/SidePanel.cpp
+    src/ui/SidePanel.hpp
     src/ui/Menu.cpp
     src/ui/Menu.hpp
     src/update/Updater.cpp
