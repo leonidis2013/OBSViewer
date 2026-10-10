@@ -79,6 +79,9 @@ jobs:
           cmake --build build_macos --config Release --parallel > build.log 2>&1 || status=$?
           grep -E "error:|warning: |\*\* BUILD" build.log | sort -u | head -200 || true
           if (( status != 0 )); then .github/scripts/annotate-log.sh build.log "Build failed"; fi
+          # Surface compiler warnings from OBSViewer's own sources in the run summary.
+          grep -E "/src/.*warning: " build.log | grep -v "/.deps/" | sed -E 's#^.*/src/#src/#' | sort -u | head -10 \
+            | while IFS= read -r w; do echo "::warning title=Compiler warning::$w"; done || true
           exit $status
 
       - name: Install and create the installer package
