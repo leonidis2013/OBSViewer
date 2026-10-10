@@ -2,11 +2,16 @@
 
 #include <obs.h>
 
+#include <memory>
+
 #include <mutex>
 #include <string>
 #include <vector>
 
 namespace obsviewer {
+
+struct LevelEntry;
+using AudioList = std::vector<std::shared_ptr<LevelEntry>>;
 
 // Everything the renderer needs, gathered on the Qt main thread and read on the
 // graphics thread. The main thread owns all writes; the graphics thread takes a
@@ -31,6 +36,10 @@ public:
 		obs_source_t *recLabel = nullptr;
 		obs_source_t *programNameLabel = nullptr;
 		obs_source_t *studioOffLabel = nullptr;
+		obs_source_t *mutedLabel = nullptr;
+		std::vector<AudioList> sceneAudio; // parallel to scenes
+		AudioList previewAudio;
+		bool showTileMeters = true;
 		bool studioMode = false;
 		bool streaming = false;
 		bool recording = false;
@@ -54,6 +63,7 @@ public:
 	void addView();
 	void removeView();
 	void setShowLabels(bool show);
+	void setShowTileMeters(bool show);
 	// Drop every reference; called when OBS exits or a scene collection unloads.
 	void clear();
 
@@ -67,6 +77,7 @@ private:
 		obs_source_t *rec = nullptr;
 		obs_source_t *programName = nullptr;
 		obs_source_t *studioOff = nullptr;
+		obs_source_t *muted = nullptr;
 	};
 	struct RenderScene {
 		obs_weak_source_t *weak = nullptr;
@@ -87,6 +98,9 @@ private:
 	bool recording_ = false;
 	bool recordingPaused_ = false;
 	bool showLabels_ = true;
+	bool showTileMeters_ = true;
+	std::vector<AudioList> sceneAudio_;
+	AudioList previewAudio_;
 	uint32_t baseWidth_ = 1920;
 	uint32_t baseHeight_ = 1080;
 

@@ -27,6 +27,7 @@ private:
 	QCheckBox *showSidebar_ = nullptr;
 	QCheckBox *showNetbar_ = nullptr;
 	QCheckBox *alarms_ = nullptr;
+	QCheckBox *tileMeters_ = nullptr;
 
 	QComboBox *loudnessPreset_ = nullptr;
 	QDoubleSpinBox *customTarget_ = nullptr;

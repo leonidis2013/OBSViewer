@@ -185,6 +185,20 @@ Note: "Upload" is what OBS is sending, not a speed test of the internet line.
 Sections pulse amber or red for their checks (Settings ▸ "Flash sections that need
 attention"). Loudness simply drifting off target is shown but doesn't flash.
 
+
+### Tile audio meters (stage 3, 0.3.0)
+
+- Two bars (L / R) at the right edge of each picture: RMS solid, peak tick; green,
+  amber from −9 dBFS, red from −3 dBFS; scale −60 to 0 dBFS; 20 dB/s fall-back.
+- Scene tiles: loudest unmuted source among the scene's visible audio sources
+  (groups and nested scenes included). Sources set in OBS Settings ▸ Audio as global
+  devices aren't part of any scene, so they show only in the programme meter.
+- Preview tile: the preview scene's sources. Program tile: the measured stream mix.
+- Muted: all sources in the scene muted → red meter background and a MUTED tag.
+- Clip: sample peak ≥ −0.5 dBFS → red cap for 2 s.
+- One OBS volume meter per audio source, shared by all tiles; created and removed as
+  scenes change.
+
 ## 5. Settings
 
 Stored as JSON in `~/Library/Application Support/obs-studio/plugin_config/obsviewer/config.json`.
@@ -202,6 +216,7 @@ Stored as JSON in `~/Library/Application Support/obs-studio/plugin_config/obsvie
 | `loudness_preset` | `0` (YouTube −14) | Loudness target preset. |
 | `custom_target_lufs` | `-16` | Target when the preset is Custom. |
 | `audio_track` | `1` | OBS mix track the meter measures. |
+| `tile_meters` | `true` | Audio meters on each tile. |
 | `update_auto_check` | `true` | Check for updates when OBS starts (at most once every 12 h). |
 | `update_repo` | `leonidis2013/OBSViewer` | GitHub repository releases come from. |
 | `update_include_prereleases` | `false` | Also offer beta / rc releases. |

@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.3.0] — 2026-10-10
+
+Stage 3: audio on every tile.
+
+- Audio meters on each tile: left / right bars at the right edge of the picture, with RMS as a solid bar and a peak tick (green, amber from −9 dB, red from −3 dB).
+- Each scene tile shows the loudest unmuted audio source in that scene (visible items, including groups and nested scenes). The Preview tile shows the preview scene; the Program tile shows the actual stream mix.
+- Mute indicator: when every audio source in a scene is muted, its meter turns red and shows MUTED.
+- Clip indicator: a red cap on the meter for 2 seconds when a source hits −0.5 dBFS or above.
+- Settings ▸ Multiview: "Show audio meters on tiles" switch.
+
 ## [0.2.0] — 2026-10-10
 
 New layout with stream, network and audio monitoring.

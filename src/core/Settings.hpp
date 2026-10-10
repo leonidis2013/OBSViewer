@@ -18,6 +18,7 @@ struct Settings {
 	bool showSidebar = true; // stream / record / audio / health on the right
 	bool showNetbar = true;  // network and loudness history along the bottom
 	bool alarms = true;      // flash sections that need attention
+	bool tileMeters = true;  // audio meters on each tile
 
 	// Audio
 	int loudnessPreset = 0;          // index into bm::kLoudnessPresets (0 = YouTube, -14 LUFS)

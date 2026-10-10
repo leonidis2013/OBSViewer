@@ -1,11 +1,16 @@
 #include "viewer/Renderer.hpp"
 
+#include "audio/ProgramLoudness.hpp"
+#include "audio/SourceLevels.hpp"
+#include "core/LevelMath.hpp"
+
 #include "viewer/Layouts.hpp"
 #include "viewer/ViewerState.hpp"
 #include "ui/Theme.hpp"
 
 #include <obs.h>
 #include <graphics/graphics.h>
+#include <util/platform.h>
 
 #include <algorithm>
 #include <cmath>
@@ -139,6 +144,74 @@ void drawTileNote(obs_source_t *label, const Rect &r, float pad, float maxHeight
 	drawLabelAt(label, r.x + pad * 1.6f, r.y + pad, s, theme::kLabelPlate, pad * 0.6f);
 }
 
+
+uint32_t levelColor(float db)
+{
+	if (db >= -3.0f)
+		return theme::kBad;
+	if (db >= -9.0f)
+		return theme::kWarn;
+	return theme::kGood;
+}
+
+levels::TileLevels readTile(const AudioList &list, uint64_t now)
+{
+	std::vector<levels::SourceReading> readings;
+	readings.reserve(list.size());
+	for (const auto &e : list)
+		if (e)
+			readings.push_back(e->read(now));
+	return levels::combine(readings);
+}
+
+// Two thin bars (L / R) at the right edge of the picture: RMS as a solid bar,
+// peak as a tick, red cap when clipping, red tint and a MUTED tag when muted.
+void drawTileMeter(const levels::TileLevels &t, const Rect &pic, float px, float pad, obs_source_t *mutedLabel,
+		   float maxLabel)
+{
+	if (!t.hasAudio)
+		return;
+	const float barW = std::max(3.0f * px, pic.w * 0.011f);
+	const float gap = 1.0f * px;
+	const float h = pic.h - 2 * pad;
+	const float x0 = pic.x + pic.w - pad - 2 * barW - gap;
+	const float y0 = pic.y + pad;
+	if (h <= 0 || x0 <= pic.x)
+		return;
+
+	drawBox(x0 - gap, y0 - gap, 2 * barW + 3 * gap, h + 2 * gap, t.allMuted ? 0xCC4A1416 : theme::kLabelPlate);
+
+	for (int c = 0; c < 2; ++c) {
+		const float x = x0 + c * (barW + gap);
+		if (!t.allMuted) {
+			const float rmsH = h * levels::meterPos(t.rms[c]);
+			if (rmsH > 0)
+				drawBox(x, y0 + h - rmsH, barW, rmsH, levelColor(t.rms[c]));
+			if (t.peak[c] > -60.0f) {
+				const float py = y0 + h - h * levels::meterPos(t.peak[c]);
+				drawBox(x, py, barW, std::max(1.0f * px, 1.5f * px), levelColor(t.peak[c]));
+			}
+		}
+	}
+	if (t.clipped && !t.allMuted)
+		drawBox(x0, y0, 2 * barW + gap, 3.0f * px, theme::kBad);
+
+	if (t.allMuted && mutedLabel) {
+		const float lw = static_cast<float>(obs_source_get_width(mutedLabel));
+		const float lh = static_cast<float>(obs_source_get_height(mutedLabel));
+		if (lw > 0 && lh > 0) {
+			const float s = std::min({1.0f, (maxLabel * 0.8f) / lh, (pic.w * 0.3f) / lw});
+			const float x = x0 - gap - pad * 0.5f - lw * s;
+			drawBox(x - pad * 0.4f, y0, lw * s + pad * 0.8f, lh * s, 0xE0A32D2D);
+			gs_matrix_push();
+			gs_matrix_translate3f(x, y0, 0.0f);
+			gs_matrix_scale3f(s, s, 1.0f);
+			obs_source_video_render(mutedLabel);
+			gs_matrix_pop();
+		}
+	}
+}
+
 } // namespace
 
 void Renderer::render(const Layout &layout, uint32_t cx, uint32_t cy)
@@ -177,6 +250,7 @@ void Renderer::render(const Layout &layout, uint32_t cx, uint32_t cy)
 		    areaW, 0.0f, areaH);
 
 	drawBox(0, 0, areaW, areaH, theme::kBg);
+	const uint64_t now = os_gettime_ns();
 
 	for (const Tile &tile : layout.tiles) {
 		if (tile.kind == TileKind::Status)
@@ -235,6 +309,24 @@ void Renderer::render(const Layout &layout, uint32_t cx, uint32_t cy)
 			renderScaled(f, picture, [source] { obs_source_video_render(source); });
 
 		drawFrame(r, t, edge);
+
+		if (snap.showTileMeters) {
+			levels::TileLevels tl;
+			if (isProgram) {
+				// Program tile shows the real stream mix (the track the loudness meter measures).
+				const auto a = ProgramLoudness::get().snapshot();
+				tl.hasAudio = a.active;
+				tl.peak[0] = tl.rms[0] = a.peakL;
+				tl.peak[1] = tl.rms[1] = a.peakR;
+				tl.clipped = a.truePeak3s > 0.0f;
+			} else if (tile.kind == TileKind::Preview) {
+				tl = readTile(snap.previewAudio, now);
+			} else if (tile.kind == TileKind::Scene && tile.sceneIndex >= 0 &&
+				   static_cast<size_t>(tile.sceneIndex) < snap.sceneAudio.size()) {
+				tl = readTile(snap.sceneAudio[tile.sceneIndex], now);
+			}
+			drawTileMeter(tl, inner, px, pad, snap.mutedLabel, std::max(10.0f * px, inner.h * 0.11f));
+		}
 
 		if (snap.showLabels) {
 			// Label height tracks the tile so small tiles get small labels.
