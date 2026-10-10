@@ -56,15 +56,18 @@ Builds run on GitHub Actions (`.github/workflows/build.yml`):
 
 - Every push runs the unit tests and a universal macOS build, and refreshes the
   **Latest build (main)** pre-release with the installer.
-- Pushing a tag `vX.Y.Z` publishes **OBSViewer X.Y.Z** with the installer and
+- Publishing a release (below) creates **OBSViewer X.Y.Z** with the installer and
   `SHA256SUMS.txt`. The release notes come from that version's section in
   [CHANGELOG.md](CHANGELOG.md). Tags like `v0.2.0-beta.1` publish pre-releases.
 
 ### Releasing a new version
 
 1. Add a `## [X.Y.Z]` section to `CHANGELOG.md` and set `"version"` in
-   `buildspec.json`.
-2. Commit, then `git tag vX.Y.Z && git push origin main vX.Y.Z`.
+   `buildspec.json`, then push to `main`.
+2. Publish it, either way:
+   - On GitHub (works from the GitHub mobile app): **Actions ▸ Build OBSViewer ▸
+     Run workflow**, tick **Publish a release**, and run it on `main`; or
+   - from a computer: `git tag vX.Y.Z && git push origin vX.Y.Z`.
 3. Installed copies offer the update on their next check.
 
 ### Building locally (optional)

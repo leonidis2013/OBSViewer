@@ -6,6 +6,11 @@ on:
     tags: [ 'v*' ]
   pull_request:
   workflow_dispatch:
+    inputs:
+      release:
+        description: "Publish a release for the version in buildspec.json"
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -120,7 +125,7 @@ jobs:
   release:
     name: Publish release
     needs: macos
-    if: github.event_name == 'push'
+    if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.release)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -136,8 +141,17 @@ jobs:
           GH_REPO: ${{ github.repository }}
         run: |
           ls -l dist
-          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
-            TAG="$GITHUB_REF_NAME"
+          if [[ "$GITHUB_REF" == refs/tags/v* || "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+              TAG="$GITHUB_REF_NAME"
+            else
+              # "Run workflow" with "Publish a release" ticked: tag the current commit.
+              TAG="v$(jq -r .version buildspec.json)"
+              if gh release view "$TAG" >/dev/null 2>&1; then
+                echo "::error title=Release exists::$TAG is already published. Bump the version in buildspec.json first."
+                exit 1
+              fi
+            fi
             VERSION="${TAG#v}"
             # Release notes: this version's section of CHANGELOG.md.
             awk -v v="$VERSION" '
@@ -147,7 +161,7 @@ jobs:
             if [[ ! -s notes.md ]]; then echo "OBSViewer $VERSION" > notes.md; fi
             PRE=""
             if [[ "$VERSION" == *-* ]]; then PRE="--prerelease"; fi
-            gh release create "$TAG" dist/* --title "OBSViewer $VERSION" --notes-file notes.md $PRE
+            gh release create "$TAG" dist/* --target "$GITHUB_SHA" --title "OBSViewer $VERSION" --notes-file notes.md $PRE
           else
             # Rolling test build from main. Its tag isn't a version, so the in-plugin updater ignores it.
             gh release delete latest --cleanup-tag --yes 2>/dev/null || true

@@ -188,9 +188,10 @@ The GitHub token is **not** stored in this file; it lives in the macOS Keychain.
 
 ### 7.2 Releases
 
-- Push a tag `vX.Y.Z` (or `vX.Y.Z-beta.N`) → CI builds, packages and publishes a
+- Push a tag `vX.Y.Z` (or `vX.Y.Z-beta.N`), or run the workflow manually with
+  "Publish a release" ticked → CI builds, packages and publishes a
   GitHub Release named `OBSViewer X.Y.Z` with `OBSViewer-X.Y.Z-macos-universal.pkg`
-  and a `SHA256SUMS.txt`. Release notes come from the tag message or `CHANGELOG.md`.
+  and a `SHA256SUMS.txt`. Release notes come from that version's section of `CHANGELOG.md`.
 - Every push to `main` also refreshes a rolling **Latest build** pre-release for
   testing; the updater ignores it unless pre-releases are enabled.
 
