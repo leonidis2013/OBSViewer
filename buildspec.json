@@ -1,0 +1,39 @@
+{
+    "dependencies": {
+        "obs-studio": {
+            "version": "32.2.2",
+            "baseUrl": "https://github.com/obsproject/obs-studio/archive/refs/tags",
+            "label": "OBS sources",
+            "hashes": {
+                "macos": "35d3cd0979d65664fada7119fdb612eca7c34b61a1623a330caec74bf72626c4"
+            }
+        },
+        "prebuilt": {
+            "version": "2026-07-15",
+            "baseUrl": "https://github.com/obsproject/obs-deps/releases/download",
+            "label": "Pre-Built obs-deps",
+            "hashes": {
+                "macos": "4ecb4c598dfa853168df6c2a0c4e0ffec8495a81fbd1ba051ef88ecd5e0f7e53"
+            }
+        },
+        "qt6": {
+            "version": "2026-07-15",
+            "baseUrl": "https://github.com/obsproject/obs-deps/releases/download",
+            "label": "Pre-Built Qt6",
+            "hashes": {
+                "macos": "d4b8058612a7067e44b2205fe7925ee24e9ec6b15ac8c29d3e6230c70030b102"
+            }
+        }
+    },
+    "platformConfig": {
+        "macos": {
+            "bundleId": "com.leonidis2013.obsviewer"
+        }
+    },
+    "name": "obsviewer",
+    "displayName": "OBSViewer",
+    "version": "0.1.0",
+    "author": "leonidis2013",
+    "website": "https://github.com/leonidis2013/OBSViewer",
+    "email": ""
+}

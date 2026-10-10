@@ -1,0 +1,140 @@
+name: Build OBSViewer
+
+on:
+  push:
+    branches: [ main ]
+    tags: [ 'v*' ]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
+
+jobs:
+  tests:
+    name: Unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Layout, version and updater logic tests (with sanitizers)
+        run: |
+          g++ -std=c++17 -O1 -g -fsanitize=address,undefined -Wall -Wextra -Werror -Isrc \
+            tests/UnitTests.cpp src/core/Version.cpp src/viewer/Layouts.cpp src/update/ReleaseInfo.cpp \
+            -o unit_tests
+          ./unit_tests
+
+  macos:
+    name: macOS universal (arm64 + x86_64)
+    needs: tests
+    runs-on: macos-15
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set version
+        id: version
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            VERSION="${GITHUB_REF_NAME#v}"
+            # The tag decides the version baked into the plugin and installer.
+            jq --arg v "$VERSION" '.version = $v' buildspec.json > buildspec.tmp && mv buildspec.tmp buildspec.json
+          else
+            VERSION="$(jq -r .version buildspec.json)"
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Building OBSViewer $VERSION"
+          xcodebuild -version
+
+      - name: Cache OBS dependencies
+        uses: actions/cache@v4
+        with:
+          path: .deps
+          key: macos-deps-${{ hashFiles('buildspec.json', 'cmake/common/buildspec_common.cmake') }}
+          restore-keys: macos-deps-
+
+      - name: Configure
+        run: cmake --preset macos-ci
+
+      - name: Build
+        run: |
+          status=0
+          cmake --build build_macos --config Release --parallel > build.log 2>&1 || status=$?
+          grep -E "error:|warning: |\*\* BUILD" build.log | sort -u | head -200 || true
+          exit $status
+
+      - name: Show build errors
+        if: failure()
+        run: grep -n -B2 -A6 "error:" build.log | head -300 || true
+
+      - name: Install and create the installer package
+        run: cmake --install build_macos --config Release --prefix "$PWD/release/Release"
+
+      - name: Check the plugin
+        run: |
+          BIN="release/Release/obsviewer.plugin/Contents/MacOS/obsviewer"
+          file "$BIN"
+          lipo -archs "$BIN"
+          lipo -archs "$BIN" | grep -q arm64
+          lipo -archs "$BIN" | grep -q x86_64
+          codesign --verify --verbose=2 release/Release/obsviewer.plugin
+          otool -L "$BIN"
+
+      - name: Name the installer
+        id: package
+        run: |
+          PKG="OBSViewer-${{ steps.version.outputs.version }}-macos-universal.pkg"
+          mkdir -p dist
+          mv release/Release/obsviewer.pkg "dist/$PKG"
+          pkgutil --payload-files "dist/$PKG" | head -40
+          (cd dist && shasum -a 256 "$PKG" > SHA256SUMS.txt && cat SHA256SUMS.txt)
+          echo "pkg=$PKG" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: OBSViewer-macos-universal
+          path: dist/*
+
+  release:
+    name: Publish release
+    needs: macos
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: OBSViewer-macos-universal
+          path: dist
+
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          ls -l dist
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            TAG="$GITHUB_REF_NAME"
+            VERSION="${TAG#v}"
+            # Release notes: this version's section of CHANGELOG.md.
+            awk -v v="$VERSION" '
+              /^## / { if (found) exit; if (index($0, "[" v "]") || index($0, " " v)) { found=1; next } }
+              found { print }
+            ' CHANGELOG.md > notes.md || true
+            if [[ ! -s notes.md ]]; then echo "OBSViewer $VERSION" > notes.md; fi
+            PRE=""
+            if [[ "$VERSION" == *-* ]]; then PRE="--prerelease"; fi
+            gh release create "$TAG" dist/* --title "OBSViewer $VERSION" --notes-file notes.md $PRE
+          else
+            # Rolling test build from main. Its tag isn't a version, so the in-plugin updater ignores it.
+            gh release delete latest --cleanup-tag --yes 2>/dev/null || true
+            gh release create latest dist/* --target "$GITHUB_SHA" --prerelease \
+              --title "Latest build (main)" \
+              --notes "Newest build from main (${GITHUB_SHA::7}). macOS universal (Apple Silicon + Intel) installer. For testing; the in-plugin updater only offers tagged releases."
+          fi

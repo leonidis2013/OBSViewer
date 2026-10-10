@@ -1,0 +1,95 @@
+#include "core/Settings.hpp"
+
+#include <obs-module.h>
+#include <util/platform.h>
+
+#include <plugin-support.h>
+
+namespace obsviewer {
+
+namespace {
+
+constexpr const char *kFileName = "config.json";
+
+std::string getString(obs_data_t *data, const char *key, const std::string &fallback)
+{
+	if (!obs_data_has_user_value(data, key))
+		return fallback;
+	const char *value = obs_data_get_string(data, key);
+	return value ? std::string(value) : fallback;
+}
+
+bool getBool(obs_data_t *data, const char *key, bool fallback)
+{
+	return obs_data_has_user_value(data, key) ? obs_data_get_bool(data, key) : fallback;
+}
+
+} // namespace
+
+Settings &Settings::get()
+{
+	static Settings settings;
+	return settings;
+}
+
+void Settings::load()
+{
+	char *path = obs_module_config_path(kFileName);
+	if (!path)
+		return;
+
+	obs_data_t *data = os_file_exists(path) ? obs_data_create_from_json_file_safe(path, "bak") : nullptr;
+	bfree(path);
+	if (!data)
+		return;
+
+	const Settings defaults;
+	dockLayout = getString(data, "dock_layout", defaults.dockLayout);
+	windowLayout = getString(data, "window_layout", defaults.windowLayout);
+	windowScreen = getString(data, "window_screen", defaults.windowScreen);
+	showLabels = getBool(data, "show_labels", defaults.showLabels);
+	clickToSwitch = getBool(data, "click_to_switch", defaults.clickToSwitch);
+	updateAutoCheck = getBool(data, "update_auto_check", defaults.updateAutoCheck);
+	updateIncludePrereleases = getBool(data, "update_include_prereleases", defaults.updateIncludePrereleases);
+	updateRepo = getString(data, "update_repo", defaults.updateRepo);
+	updateSkippedVersion = getString(data, "update_skipped_version", defaults.updateSkippedVersion);
+	updateLastCheck = obs_data_has_user_value(data, "update_last_check") ? obs_data_get_int(data, "update_last_check")
+									       : 0;
+	if (updateRepo.empty())
+		updateRepo = defaults.updateRepo;
+
+	obs_data_release(data);
+}
+
+void Settings::save() const
+{
+	char *dir = obs_module_config_path("");
+	if (dir) {
+		os_mkdirs(dir);
+		bfree(dir);
+	}
+
+	char *path = obs_module_config_path(kFileName);
+	if (!path)
+		return;
+
+	obs_data_t *data = obs_data_create();
+	obs_data_set_string(data, "dock_layout", dockLayout.c_str());
+	obs_data_set_string(data, "window_layout", windowLayout.c_str());
+	obs_data_set_string(data, "window_screen", windowScreen.c_str());
+	obs_data_set_bool(data, "show_labels", showLabels);
+	obs_data_set_bool(data, "click_to_switch", clickToSwitch);
+	obs_data_set_bool(data, "update_auto_check", updateAutoCheck);
+	obs_data_set_bool(data, "update_include_prereleases", updateIncludePrereleases);
+	obs_data_set_string(data, "update_repo", updateRepo.c_str());
+	obs_data_set_string(data, "update_skipped_version", updateSkippedVersion.c_str());
+	obs_data_set_int(data, "update_last_check", updateLastCheck);
+
+	if (!obs_data_save_json_safe(data, path, "tmp", "bak"))
+		obs_log(LOG_WARNING, "could not save settings to %s", path);
+
+	obs_data_release(data);
+	bfree(path);
+}
+
+} // namespace obsviewer
