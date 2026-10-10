@@ -176,4 +176,46 @@ target_sources(
     src/update/Keychain.hpp
 )
 
+# Plugin scanner helper. Scanning loads every plugin on the system, and some crash
+# while being inspected, so each one is scanned in this separate process. It ships
+# inside the plugin bundle at Contents/Helpers/obsviewer-scan.
+add_executable(obsviewer-scan src/bus/ScanMain.cpp)
+target_compile_features(obsviewer-scan PRIVATE cxx_std_17)
+target_link_libraries(obsviewer-scan PRIVATE obsviewer_bus)
+if(APPLE)
+  target_link_libraries(
+    obsviewer-scan
+    PRIVATE
+      "$<LINK_LIBRARY:FRAMEWORK,CoreAudioKit.framework>"
+      "$<LINK_LIBRARY:FRAMEWORK,AudioToolbox.framework>"
+      "$<LINK_LIBRARY:FRAMEWORK,AudioUnit.framework>"
+      "$<LINK_LIBRARY:FRAMEWORK,CoreAudio.framework>"
+      "$<LINK_LIBRARY:FRAMEWORK,CoreMIDI.framework>"
+      "$<LINK_LIBRARY:FRAMEWORK,Accelerate.framework>"
+      "$<LINK_LIBRARY:FRAMEWORK,Cocoa.framework>"
+      "$<LINK_LIBRARY:FRAMEWORK,QuartzCore.framework>"
+      "$<LINK_LIBRARY:FRAMEWORK,IOKit.framework>"
+      "$<LINK_LIBRARY:FRAMEWORK,Security.framework>"
+  )
+  set_target_properties(
+    obsviewer-scan
+    PROPERTIES
+      XCODE_ATTRIBUTE_CODE_SIGN_ENTITLEMENTS "${CMAKE_CURRENT_SOURCE_DIR}/cmake/macos/scan-entitlements.plist"
+      XCODE_ATTRIBUTE_SKIP_INSTALL YES
+      XCODE_ATTRIBUTE_CLANG_ENABLE_OBJC_ARC NO
+  )
+endif()
+add_dependencies(${CMAKE_PROJECT_NAME} obsviewer-scan)
+# Copied in before Xcode signs the plugin bundle, so the bundle's signature covers it.
+add_custom_command(
+  TARGET ${CMAKE_PROJECT_NAME}
+  POST_BUILD
+  COMMAND "${CMAKE_COMMAND}" -E make_directory "$<TARGET_BUNDLE_CONTENT_DIR:${CMAKE_PROJECT_NAME}>/Helpers"
+  COMMAND
+    "${CMAKE_COMMAND}" -E copy "$<TARGET_FILE:obsviewer-scan>"
+    "$<TARGET_BUNDLE_CONTENT_DIR:${CMAKE_PROJECT_NAME}>/Helpers/obsviewer-scan"
+  COMMENT "Embed obsviewer-scan in the plugin bundle"
+  VERBATIM
+)
+
 set_target_properties_plugin(${CMAKE_PROJECT_NAME} PROPERTIES OUTPUT_NAME ${_name})

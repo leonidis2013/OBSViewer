@@ -35,17 +35,29 @@ class Engine {
 public:
 	static Engine &get();
 
-	// Main thread. dataDir holds the scanned plugin list and the crash marker.
-	bool init(const std::string &dataDir);
+	// Main thread. dataDir holds the scanned plugin list and crash markers;
+	// scanHelper is the obsviewer-scan executable shipped inside the plugin bundle.
+	bool init(const std::string &dataDir, const std::string &scanHelper);
 	void shutdown();
 	bool ready() const;
 
 	// ---- plugin list (main thread) ----
 	std::vector<PluginInfo> plugins() const;
+	// Plugins are scanned one file at a time in a separate helper process, so a
+	// plugin that crashes or hangs while being scanned can't take OBS down; it is
+	// skipped and listed as failed instead.
 	void startScan(bool rescanAll);
-	// One file per call; returns false when finished. progress 0..1.
+	// Never blocks. Call from a timer; returns false once the scan has finished.
+	// progress 0..1, current = the plugin being looked at.
 	bool scanStep(std::string &current, float &progress);
 	bool scanning() const;
+	void cancelScan();
+	// Plugins that crashed, hung or failed during scanning (or crashed OBS while
+	// loading) and are skipped until "Rescan all".
+	std::vector<std::string> failedPlugins() const;
+	// Set when the last OBS session ended while a plugin was being loaded; that
+	// plugin was skipped. Cleared after reading.
+	std::string takeStartupWarning();
 
 	// ---- chain (main thread) ----
 	bool addPlugin(const std::string &id, std::string &error, int insertAt = -1);
@@ -78,5 +90,9 @@ private:
 	struct Impl;
 	std::unique_ptr<Impl> impl_;
 };
+
+// Entry point of the obsviewer-scan helper executable:
+//   obsviewer-scan <format name> <file or identifier> <result file>
+int runScanHelper(int argc, char **argv);
 
 } // namespace obsviewer::bus

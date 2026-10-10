@@ -70,6 +70,26 @@ void MasterBus::registerSource()
 
 // ------------------------------------------------------------------ config
 
+namespace {
+// obsviewer.plugin/Contents/MacOS/obsviewer -> obsviewer.plugin/Contents/Helpers/obsviewer-scan
+std::string scanHelperPath()
+{
+	const char *binary = obs_get_module_binary_path(obs_current_module());
+	if (!binary)
+		return {};
+	std::string path(binary);
+	const size_t slash = path.find_last_of('/');
+	if (slash == std::string::npos)
+		return {};
+	path.resize(slash); // .../Contents/MacOS
+	const size_t up = path.find_last_of('/');
+	if (up == std::string::npos)
+		return {};
+	path.resize(up); // .../Contents
+	return path + "/Helpers/obsviewer-scan";
+}
+} // namespace
+
 void MasterBus::load()
 {
 	if (loaded_)
@@ -79,7 +99,7 @@ void MasterBus::load()
 	char *dir = obs_module_config_path("bus");
 	if (dir) {
 		os_mkdirs(dir);
-		bus::Engine::get().init(dir);
+		bus::Engine::get().init(dir, scanHelperPath());
 		bfree(dir);
 	}
 

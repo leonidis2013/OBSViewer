@@ -7,13 +7,17 @@
 #include <algorithm>
 #include <atomic>
 #include <cmath>
+#include <deque>
 #include <mutex>
+#include <thread>
 
 namespace obsviewer::bus {
 
 namespace {
 
 constexpr int kMaxChannels = 16;
+// A plugin that takes longer than this to be scanned is treated as hung.
+constexpr juce::uint32 kScanTimeoutMs = 45000;
 
 float toDb(float lin)
 {
@@ -114,14 +118,87 @@ struct Engine::Impl {
 	float masterInDb = 0.0f, masterOutDb = 0.0f;
 	PeakMeter masterPre, masterPost;
 
-	// scanning
-	std::unique_ptr<juce::PluginDirectoryScanner> scanner;
-	int scanFormat = 0;
-	bool rescanAll = false;
+	// scanning (out of process)
+	struct ScanJob {
+		int format = 0;
+		juce::String file;
+	};
+	std::string helperPath;
+	std::deque<ScanJob> queue;
+	size_t queueTotal = 0;
+	bool scanActive = false;
+	std::unique_ptr<juce::ChildProcess> child;
+	ScanJob childJob;
+	std::string childName;
+	juce::uint32 childStarted = 0;
+	std::string startupWarning;
 
 	juce::File dir() const { return juce::File(juce::String::fromUTF8(dataDir.c_str())); }
 	juce::File listFile() const { return dir().getChildFile("plugins.xml"); }
-	juce::File pedalFile() const { return dir().getChildFile("scan-in-progress.txt"); }
+	juce::File resultFile() const { return dir().getChildFile("scan-result.xml"); }
+	// Holds the identifier of a plugin while it is being created inside OBS.
+	juce::File loadingFile() const { return dir().getChildFile("loading-plugin.txt"); }
+
+	void killChild()
+	{
+		if (child) {
+			if (child->isRunning())
+				child->kill();
+			child.reset();
+		}
+	}
+
+	// Display name for a plugin file or AU identifier (never loads the plugin).
+	juce::String shortName(const juce::String &file)
+	{
+		if (file.startsWith("AudioUnit:")) {
+			for (auto *f : formats.getFormats())
+				if (f->getName() == "AudioUnit")
+					return f->getNameOfPluginFromIdentifier(file);
+			return file;
+		}
+		return juce::File(file).getFileNameWithoutExtension();
+	}
+
+	bool launch(const ScanJob &job)
+	{
+		resultFile().deleteFile();
+		juce::StringArray args;
+		args.add(juce::String::fromUTF8(helperPath.c_str()));
+		args.add(formats.getFormat(job.format)->getName());
+		args.add(job.file);
+		args.add(resultFile().getFullPathName());
+		child = std::make_unique<juce::ChildProcess>();
+		if (!child->start(args, 0)) {
+			child.reset();
+			return false;
+		}
+		childJob = job;
+		childName = shortName(job.file).toStdString();
+		childStarted = juce::Time::getMillisecondCounter();
+		return true;
+	}
+
+	// The helper writes its result file only after a clean scan; no file means
+	// it crashed, hung or found nothing loadable.
+	void collect(bool timedOut)
+	{
+		const juce::File result = resultFile();
+		std::unique_ptr<juce::XmlElement> xml = timedOut ? nullptr : juce::parseXML(result);
+		result.deleteFile();
+		bool found = false;
+		if (xml) {
+			for (auto *e : xml->getChildIterator()) {
+				juce::PluginDescription d;
+				if (d.loadFromXml(*e)) {
+					known.addType(d);
+					found = true;
+				}
+			}
+		}
+		if (!found)
+			known.addToBlacklist(childJob.file);
+	}
 
 	void saveList() const
 	{
@@ -160,19 +237,39 @@ Engine &Engine::get()
 Engine::Engine() : impl_(std::make_unique<Impl>()) {}
 Engine::~Engine() = default;
 
-bool Engine::init(const std::string &dataDir)
+bool Engine::init(const std::string &dataDir, const std::string &scanHelper)
 {
-	if (impl_->initialised)
+	auto &im = *impl_;
+	if (im.initialised)
 		return true;
 	// Runs JUCE inside OBS as a guest: JUCE's message handling rides on the
 	// host's macOS run loop, the same way plug-ins work inside a DAW.
 	juce::initialiseJuce_GUI();
-	impl_->dataDir = dataDir;
-	impl_->dir().createDirectory();
-	juce::addDefaultFormatsToManager(impl_->formats);
-	if (auto xml = juce::parseXML(impl_->listFile()))
-		impl_->known.recreateFromXml(*xml);
-	impl_->initialised = true;
+	im.dataDir = dataDir;
+	im.helperPath = scanHelper;
+	im.dir().createDirectory();
+	juce::addDefaultFormatsToManager(im.formats);
+	if (auto xml = juce::parseXML(im.listFile()))
+		im.known.recreateFromXml(*xml);
+	// The old in-process scanner's marker; no longer used.
+	im.dir().getChildFile("scan-in-progress.txt").deleteFile();
+
+	// OBS quit (most likely crashed) while a plugin was being created last time:
+	// take that plugin off the list so the saved chain doesn't crash OBS again.
+	const juce::File loading = im.loadingFile();
+	if (loading.existsAsFile()) {
+		const juce::String id = loading.loadFileAsString().trim();
+		loading.deleteFile();
+		if (auto desc = im.known.getTypeForIdentifierString(id)) {
+			im.startupWarning = (desc->name + " was being loaded when OBS last closed unexpectedly, "
+						     "so it has been skipped. Use \"Rescan all\" to try it again.")
+						    .toStdString();
+			im.known.addToBlacklist(desc->fileOrIdentifier);
+			im.known.removeType(*desc);
+			im.saveList();
+		}
+	}
+	im.initialised = true;
 	return true;
 }
 
@@ -180,7 +277,7 @@ void Engine::shutdown()
 {
 	if (!impl_->initialised)
 		return;
-	impl_->scanner.reset();
+	cancelScan();
 	clearChain();
 	juce::shutdownJuce_GUI();
 	impl_->initialised = false;
@@ -213,33 +310,73 @@ std::vector<PluginInfo> Engine::plugins() const
 
 void Engine::startScan(bool rescanAll)
 {
-	impl_->scanFormat = 0;
-	impl_->rescanAll = rescanAll;
-	if (rescanAll)
-		impl_->known.clear();
-	impl_->scanner.reset();
+	auto &im = *impl_;
+	cancelScan();
+	if (rescanAll) {
+		im.known.clear();
+		im.known.clearBlacklistedFiles();
+	}
+	const juce::StringArray blacklist = im.known.getBlacklistedFiles();
+	for (int f = 0; f < im.formats.getNumFormats(); ++f) {
+		auto *format = im.formats.getFormat(f);
+		// Lists files (VST3) or registered components (AU) without loading them.
+		const juce::StringArray files =
+			format->searchPathsForPlugins(format->getDefaultLocationsToSearch(), true, true);
+		for (const auto &file : files) {
+			if (blacklist.contains(file))
+				continue;
+			// The bus only processes audio: skip instruments and MIDI tools.
+			if (file.startsWith("AudioUnit:Synths/") || file.startsWith("AudioUnit:MidiEffects/") ||
+			    file.startsWith("AudioUnit:Generators/"))
+				continue;
+			if (!rescanAll && im.known.isListingUpToDate(file, *format))
+				continue;
+			im.queue.push_back({f, file});
+		}
+	}
+	im.queueTotal = im.queue.size();
+	im.scanActive = true;
 }
 
 bool Engine::scanStep(std::string &current, float &progress)
 {
 	auto &im = *impl_;
-	const int numFormats = im.formats.getNumFormats();
-	while (im.scanFormat < numFormats) {
-		if (!im.scanner) {
-			auto *format = im.formats.getFormat(im.scanFormat);
-			im.scanner = std::make_unique<juce::PluginDirectoryScanner>(
-				im.known, *format, format->getDefaultLocationsToSearch(), true, im.pedalFile(), false);
-		}
-		juce::String name;
-		if (im.scanner->scanNextFile(!im.rescanAll, name)) {
-			current = name.toStdString();
-			progress = (static_cast<float>(im.scanFormat) + im.scanner->getProgress()) /
-				   static_cast<float>(std::max(1, numFormats));
+	if (!im.scanActive) {
+		progress = 1.0f;
+		current.clear();
+		return false;
+	}
+
+	if (im.child) {
+		const bool running = im.child->isRunning();
+		const bool timedOut = running && juce::Time::getMillisecondCounter() - im.childStarted > kScanTimeoutMs;
+		if (running && !timedOut) {
+			current = im.childName;
+			progress = im.queueTotal ? static_cast<float>(im.queueTotal - im.queue.size() - 1) /
+							   static_cast<float>(im.queueTotal)
+						 : 1.0f;
 			return true;
 		}
-		im.scanner.reset();
-		++im.scanFormat;
+		im.killChild();
+		im.collect(timedOut);
 	}
+
+	while (!im.queue.empty()) {
+		const Impl::ScanJob job = im.queue.front();
+		im.queue.pop_front();
+		if (im.launch(job)) {
+			current = im.childName;
+			progress = static_cast<float>(im.queueTotal - im.queue.size() - 1) /
+				   static_cast<float>(std::max<size_t>(1, im.queueTotal));
+			return true;
+		}
+		// The helper is missing or won't start: never fall back to scanning
+		// inside OBS, just stop.
+		im.queue.clear();
+		im.startupWarning = "The plugin scanner (obsviewer-scan) couldn't be started. Reinstall OBSViewer.";
+	}
+
+	im.scanActive = false;
 	im.saveList();
 	progress = 1.0f;
 	current.clear();
@@ -248,7 +385,33 @@ bool Engine::scanStep(std::string &current, float &progress)
 
 bool Engine::scanning() const
 {
-	return impl_->scanner != nullptr;
+	return impl_->scanActive;
+}
+
+void Engine::cancelScan()
+{
+	auto &im = *impl_;
+	im.killChild();
+	im.queue.clear();
+	if (im.scanActive)
+		im.saveList();
+	im.scanActive = false;
+}
+
+std::vector<std::string> Engine::failedPlugins() const
+{
+	std::vector<std::string> out;
+	for (const auto &f : impl_->known.getBlacklistedFiles())
+		out.push_back(impl_->shortName(f).toStdString());
+	std::sort(out.begin(), out.end());
+	return out;
+}
+
+std::string Engine::takeStartupWarning()
+{
+	std::string w;
+	w.swap(impl_->startupWarning);
+	return w;
 }
 
 // ---------------------------------------------------------------- chain
@@ -262,8 +425,12 @@ bool Engine::addPlugin(const std::string &id, std::string &error, int insertAt)
 		return false;
 	}
 	juce::String err;
+	// If the plugin takes OBS down while it's being created, the next start
+	// finds this marker and skips the plugin (see init).
+	im.loadingFile().replaceWithText(desc->createIdentifierString());
 	auto instance = im.formats.createPluginInstance(*desc, im.sampleRate, im.maxBlock, err);
 	if (!instance) {
+		im.loadingFile().deleteFile();
 		error = err.isNotEmpty() ? err.toStdString() : std::string("The plugin couldn't be loaded.");
 		return false;
 	}
@@ -271,6 +438,7 @@ bool Engine::addPlugin(const std::string &id, std::string &error, int insertAt)
 	slot->desc = *desc;
 	im.configure(*instance, *slot);
 	slot->plugin = std::move(instance);
+	im.loadingFile().deleteFile();
 
 	std::lock_guard<std::mutex> lock(im.chainLock);
 	if (insertAt < 0 || static_cast<size_t>(insertAt) > im.chain.size())
@@ -550,6 +718,55 @@ void Engine::process(float *left, float *right, int frames)
 
 	applyGain(io, frames, im.masterOut.load(std::memory_order_relaxed));
 	im.masterPost.feed(io, frames, im.sampleRate);
+}
+
+// ---------------------------------------------------------------- scan helper
+
+int runScanHelper(int argc, char **argv)
+{
+	if (argc < 4)
+		return 2;
+	const juce::String formatName = juce::String::fromUTF8(argv[1]);
+	const juce::String identifier = juce::String::fromUTF8(argv[2]);
+	const juce::File resultFile(juce::String::fromUTF8(argv[3]));
+
+	juce::ScopedJuceInitialiser_GUI gui;
+#if JUCE_MAC
+	juce::Process::setDockIconVisible(false);
+#endif
+	juce::AudioPluginFormatManager formats;
+	juce::addDefaultFormatsToManager(formats);
+	juce::AudioPluginFormat *format = nullptr;
+	for (auto *f : formats.getFormats())
+		if (f->getName() == formatName)
+			format = f;
+	if (format == nullptr)
+		return 3;
+
+	juce::OwnedArray<juce::PluginDescription> results;
+	juce::PluginDescription probe;
+	probe.fileOrIdentifier = identifier;
+	if (format->requiresUnblockedMessageThreadDuringCreation(probe)) {
+		// Out-of-process Audio Units need the message loop running while they load.
+		std::thread worker([&] {
+			format->findAllTypesForFile(results, identifier);
+			juce::MessageManager::getInstance()->stopDispatchLoop();
+		});
+		juce::MessageManager::getInstance()->runDispatchLoop();
+		worker.join();
+	} else {
+		format->findAllTypesForFile(results, identifier);
+	}
+
+	if (results.isEmpty())
+		return 4;
+	juce::XmlElement list("LIST");
+	for (auto *d : results)
+		list.addChildElement(d->createXml().release());
+	const juce::File temp = resultFile.getSiblingFile(resultFile.getFileName() + ".tmp");
+	if (!list.writeTo(temp) || !temp.moveFileTo(resultFile))
+		return 5;
+	return 0;
 }
 
 } // namespace obsviewer::bus

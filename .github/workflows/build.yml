@@ -104,6 +104,10 @@ jobs:
           lipo -archs "$BIN"
           lipo -archs "$BIN" | grep -q arm64
           lipo -archs "$BIN" | grep -q x86_64
+          HELPER="release/Release/obsviewer.plugin/Contents/Helpers/obsviewer-scan"
+          lipo -archs "$HELPER" | grep -q arm64
+          lipo -archs "$HELPER" | grep -q x86_64
+          codesign -d --entitlements - "$HELPER"
           codesign --verify --verbose=2 release/Release/obsviewer.plugin
           otool -L "$BIN"
 
