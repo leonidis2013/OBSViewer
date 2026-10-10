@@ -4,7 +4,7 @@ An ATEM Mini–style multiview for OBS Studio on macOS, with tally, labels and s
 status. Stream health, audio metering, alerts and a VST3 / Audio Unit channel strip
 follow in later stages — see [docs/DESIGN.md](docs/DESIGN.md).
 
-- **macOS 12 or newer**, Apple Silicon and Intel (one universal installer)
+- **macOS 13 or newer**, Apple Silicon and Intel (one universal installer)
 - **OBS Studio 32** or newer
 
 ## Install

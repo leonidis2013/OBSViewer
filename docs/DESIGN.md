@@ -14,7 +14,7 @@ channel strip that hosts VST3 and Audio Unit plugins.
 | Area | Decision |
 |---|---|
 | Approach | Native OBS plugin (C++, libobs + obs-frontend-api + Qt 6). OBS's own Multiview cannot be extended by plugins, so OBSViewer draws its own. |
-| Platforms | macOS 12+, universal binary (arm64 + x86_64). Windows and Linux are out of scope. |
+| Platforms | macOS 13+, universal binary (arm64 + x86_64). Windows and Linux are out of scope. |
 | Minimum OBS | 32.x (built against 32.2.2). |
 | Where it shows | Both: an OBS dock **and** a fullscreen window on any monitor. |
 | Layouts | Several presets, switchable live from the dock, the fullscreen window's right-click menu, or Settings. Dock and fullscreen window each keep their own layout. |
@@ -271,7 +271,7 @@ The GitHub token is **not** stored in this file; it lives in the macOS Keychain.
 - CI builds a universal `obsviewer.plugin` and wraps it in a flat `.pkg`
   (`pkgbuild` + `productbuild`). The installer targets the **current user's home**,
   installing to `~/Library/Application Support/obs-studio/plugins/` — no admin
-  password needed. It refuses to install on macOS older than 12.
+  password needed. It refuses to install on macOS older than 13.
 - Builds are ad-hoc signed. If Apple Developer ID secrets are added to the repo later,
   CI signs and notarises the installer automatically (see README).
 

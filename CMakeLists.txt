@@ -93,6 +93,22 @@ set_target_properties(
     XCODE_ATTRIBUTE_GCC_WARN_SIGN_COMPARE NO
 )
 target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE obsviewer_bus)
+if(APPLE)
+  # Frameworks the JUCE plugin host needs (AU editors live in CoreAudioKit).
+  target_link_libraries(
+    ${CMAKE_PROJECT_NAME}
+    PRIVATE
+      "$<LINK_LIBRARY:FRAMEWORK,CoreAudioKit.framework>"
+      "$<LINK_LIBRARY:FRAMEWORK,AudioToolbox.framework>"
+      "$<LINK_LIBRARY:FRAMEWORK,AudioUnit.framework>"
+      "$<LINK_LIBRARY:FRAMEWORK,CoreAudio.framework>"
+      "$<LINK_LIBRARY:FRAMEWORK,CoreMIDI.framework>"
+      "$<LINK_LIBRARY:FRAMEWORK,Accelerate.framework>"
+      "$<LINK_LIBRARY:FRAMEWORK,Cocoa.framework>"
+      "$<LINK_LIBRARY:FRAMEWORK,QuartzCore.framework>"
+      "$<LINK_LIBRARY:FRAMEWORK,IOKit.framework>"
+  )
+endif()
 
 target_sources(
   ${CMAKE_PROJECT_NAME}
