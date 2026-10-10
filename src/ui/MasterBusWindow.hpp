@@ -2,56 +2,67 @@
 
 #include <QDialog>
 
+#include <string>
 #include <vector>
 
-class QCheckBox;
-class QComboBox;
-class QDoubleSpinBox;
 class QLabel;
-class QListWidget;
+class QLineEdit;
 class QPushButton;
 class QTimer;
-class QToolButton;
+class QTreeWidget;
 class QVBoxLayout;
 
 namespace obsviewer {
 
-class MiniMeter;
-class SlotRow;
+class DbKnob;
+class FaderMeter;
+class PowerButton;
+class SlotWidget;
+class StripButton;
 
-// Master bus: on/off, which sources go through it, and the plugin chain
-// (VST3 / Audio Unit inserts with gain staging and meters).
+// Master bus as a vertical channel strip (LiveProfessor / Waves style):
+// power and inputs on top, insert slots, input trim, then the output fader with
+// stereo and gain-reduction meters. A plugin browser sits to the right.
 class MasterBusWindow : public QDialog {
 public:
 	explicit MasterBusWindow(QWidget *parent = nullptr);
 
 private:
 	void refreshAll();
-	void refreshSources();
-	void refreshChain();
+	void refreshSlots();
 	void refreshStatus();
-	void rebuildAddMenu();
-	void addPlugin(const std::string &id);
+	void refreshBrowser();
+	void selectSlot(int index);
+	void insertPlugin(const std::string &id, int index); // index == slotCount → append
+	void replacePlugin(const std::string &id, int index);
+	void showSlotMenu(int index, const QPoint &globalPos);
+	void showInsertMenu(int index, const QPoint &globalPos);
+	void showInputs();
 	void startScan(bool rescanAll);
 	void scanTick();
+	void finishScan();
+	void insertFromBrowser();
 
-	QCheckBox *enabled_ = nullptr;
+	// strip
+	PowerButton *power_ = nullptr;
 	QLabel *status_ = nullptr;
-	MiniMeter *masterMeter_ = nullptr;
-	QDoubleSpinBox *masterIn_ = nullptr;
-	QDoubleSpinBox *masterOut_ = nullptr;
+	StripButton *inputs_ = nullptr;
+	QVBoxLayout *slotsLayout_ = nullptr;
+	QWidget *slotsBox_ = nullptr;
+	std::vector<SlotWidget *> slots_;
+	DbKnob *trim_ = nullptr;
+	FaderMeter *fader_ = nullptr;
+	QLabel *footer_ = nullptr;
+	int selected_ = -1;
 
-	QListWidget *sources_ = nullptr;
-	QComboBox *sendTrack_ = nullptr;
-	std::vector<QCheckBox *> outputTracks_;
-
-	QVBoxLayout *chainLayout_ = nullptr;
-	QWidget *chainBox_ = nullptr;
-	std::vector<SlotRow *> rows_;
-	QToolButton *addButton_ = nullptr;
+	// browser
+	QLineEdit *search_ = nullptr;
+	QTreeWidget *tree_ = nullptr;
+	QPushButton *insertButton_ = nullptr;
 	QPushButton *scanButton_ = nullptr;
+	QPushButton *rescanButton_ = nullptr;
 	QLabel *scanStatus_ = nullptr;
-	QLabel *latency_ = nullptr;
+	QLabel *failed_ = nullptr;
 
 	QTimer *meterTimer_ = nullptr;
 	QTimer *scanTimer_ = nullptr;

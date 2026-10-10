@@ -1,7 +1,6 @@
 #include "ui/MultiviewPanel.hpp"
 
 #include "core/Settings.hpp"
-#include "ui/NetworkBar.hpp"
 #include "ui/Paint.hpp"
 #include "ui/SidePanel.hpp"
 #include "ui/ViewerDisplay.hpp"
@@ -15,9 +14,7 @@ MultiviewPanel::MultiviewPanel(bool compact, QWidget *parent) : QWidget(parent)
 {
 	display_ = new ViewerDisplay(this);
 	side_ = new SidePanel(this);
-	net_ = new NetworkBar(this);
 	side_->setCompact(compact);
-	net_->setCompact(compact);
 
 	auto *grid = new QGridLayout(this);
 	const int m = compact ? 4 : 8;
@@ -25,7 +22,6 @@ MultiviewPanel::MultiviewPanel(bool compact, QWidget *parent) : QWidget(parent)
 	grid->setSpacing(compact ? 4 : 6);
 	grid->addWidget(display_, 0, 0);
 	grid->addWidget(side_, 0, 1);
-	grid->addWidget(net_, 1, 0, 1, 2);
 	grid->setColumnStretch(0, 1);
 	grid->setRowStretch(0, 1);
 
@@ -46,7 +42,6 @@ void MultiviewPanel::applySettings()
 {
 	const Settings &s = Settings::get();
 	side_->setVisible(s.showSidebar);
-	net_->setVisible(s.showNetbar);
 }
 
 void MultiviewPanel::paintEvent(QPaintEvent *)

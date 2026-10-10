@@ -12,6 +12,7 @@
 #include "update/ReleaseInfo.hpp"
 #include "viewer/Layouts.hpp"
 
+#include <algorithm>
 #include <cmath>
 #include <vector>
 #include <cstdio>
@@ -32,108 +33,142 @@ static int checks = 0;
 		}                                                                   \
 	} while (0)
 
-static bool near(float a, float b)
+static bool overlaps(const Box &a, const Box &b)
 {
-	return std::fabs(a - b) < 1e-4f;
+	const float e = 1e-3f;
+	return a.x < b.x + b.w - e && b.x < a.x + a.w - e && a.y < b.y + b.h - e && b.y < a.y + a.h - e;
+}
+
+static int countScenes(const std::vector<PlacedTile> &tiles)
+{
+	int n = 0;
+	for (const auto &t : tiles)
+		n += t.kind == TileKind::Scene ? 1 : 0;
+	return n;
+}
+
+// Every tile inside the view, no overlaps, pictures at the canvas aspect ratio,
+// label band directly under the picture.
+static void checkPlacement(const std::vector<PlacedTile> &tiles, const PlaceParams &p)
+{
+	const float e = 0.01f;
+	std::set<int> scenes;
+	for (size_t i = 0; i < tiles.size(); ++i) {
+		const PlacedTile &t = tiles[i];
+		CHECK(t.cell.x >= -e && t.cell.y >= -e);
+		CHECK(t.cell.x + t.cell.w <= p.width + e);
+		CHECK(t.cell.y + t.cell.h <= p.height + e);
+		CHECK(t.picture.w > 0 && t.picture.h > 0);
+		CHECK(std::fabs(t.picture.w / t.picture.h - p.aspect) < 0.01f);
+		CHECK(std::fabs(t.label.y - (t.picture.y + t.picture.h)) < e);
+		CHECK(std::fabs(t.label.h - p.labelHeight) < e);
+		if (t.kind == TileKind::Scene) {
+			CHECK(t.sceneIndex >= 0);
+			CHECK(scenes.insert(t.sceneIndex).second);
+		}
+		for (size_t j = i + 1; j < tiles.size(); ++j)
+			CHECK(!overlaps(t.cell, tiles[j].cell));
+	}
+	int expected = 0;
+	for (int idx : scenes)
+		CHECK(idx == expected++);
 }
 
 static void testLayouts()
 {
 	std::set<std::string> ids;
-	for (const Layout &l : allLayouts()) {
+	for (const LayoutInfo &l : allLayouts()) {
 		CHECK(!l.id.empty());
 		CHECK(!l.name.empty());
 		CHECK(ids.insert(l.id).second); // unique ids
-		CHECK(!l.tiles.empty());
-
-		std::set<int> sceneIndices;
-		for (size_t i = 0; i < l.tiles.size(); ++i) {
-			const Tile &t = l.tiles[i];
-			// inside the canvas
-			CHECK(t.rect.x >= -1e-4f && t.rect.y >= -1e-4f);
-			CHECK(t.rect.x + t.rect.w <= 1.0f + 1e-4f);
-			CHECK(t.rect.y + t.rect.h <= 1.0f + 1e-4f);
-			CHECK(t.rect.w > 0 && t.rect.h > 0);
-			// picture tiles keep the canvas aspect ratio (w == h in normalised units)
-			if (t.kind != TileKind::Status)
-				CHECK(near(t.rect.w, t.rect.h));
-			if (t.kind == TileKind::Scene) {
-				CHECK(t.sceneIndex >= 0);
-				CHECK(sceneIndices.insert(t.sceneIndex).second); // each scene once
-			}
-			// no overlaps
-			for (size_t j = i + 1; j < l.tiles.size(); ++j) {
-				const NRect &a = t.rect, &b = l.tiles[j].rect;
-				const bool overlap = a.x < b.x + b.w - 1e-4f && b.x < a.x + a.w - 1e-4f &&
-						     a.y < b.y + b.h - 1e-4f && b.y < a.y + a.h - 1e-4f;
-				CHECK(!overlap);
-			}
-		}
-		// scene indices are 0..n-1
-		int expected = 0;
-		for (int idx : sceneIndices)
-			CHECK(idx == expected++);
 	}
-
 	CHECK(layoutById("atem").id == "atem");
 	CHECK(layoutById("does-not-exist").id == kDefaultLayoutId);
-	CHECK(layoutById("atem").sceneTileCount() == 4);
-	CHECK(layoutById("classic8").sceneTileCount() == 8);
-	CHECK(layoutById("bigprogram").sceneTileCount() == 6);
-	CHECK(layoutById("grid3").sceneTileCount() == 9);
-	CHECK(layoutById("grid4").sceneTileCount() == 16);
-}
+	CHECK(std::string(kDefaultLayoutId) == "auto");
 
-static void checkLayoutGeometry(const Layout &l)
-{
-	for (size_t i = 0; i < l.tiles.size(); ++i) {
-		const NRect &a = l.tiles[i].rect;
-		CHECK(a.x >= -1e-4f && a.y >= -1e-4f && a.x + a.w <= 1.0f + 1e-4f && a.y + a.h <= 1.0f + 1e-4f);
-		for (size_t j = i + 1; j < l.tiles.size(); ++j) {
-			const NRect &b = l.tiles[j].rect;
-			const bool overlap = a.x < b.x + b.w - 1e-4f && b.x < a.x + a.w - 1e-4f && a.y < b.y + b.h - 1e-4f &&
-					     b.y < a.y + a.h - 1e-4f;
-			CHECK(!overlap);
+	const std::pair<float, float> sizes[] = {{1920, 1080}, {1600, 1000}, {800, 450},  {420, 260},
+						 {1000, 1400}, {2560, 900},  {300, 900}, {3000, 400}};
+	for (const LayoutInfo &l : allLayouts()) {
+		for (const auto &[w, h] : sizes) {
+			for (float label : {0.0f, 18.0f}) {
+				PlaceParams p;
+				p.width = w;
+				p.height = h;
+				p.labelHeight = label;
+				p.sceneCount = 7;
+				const auto tiles = placeTiles(l.id, p);
+				CHECK(!tiles.empty());
+				checkPlacement(tiles, p);
+				if (l.fixedScenes >= 0)
+					CHECK(countScenes(tiles) == l.fixedScenes);
+				// fills the view in at least one direction
+				float right = 0, bottom = 0, left = w, top = h;
+				for (const auto &t : tiles) {
+					right = std::max(right, t.cell.x + t.cell.w);
+					bottom = std::max(bottom, t.cell.y + t.cell.h);
+					left = std::min(left, t.cell.x);
+					top = std::min(top, t.cell.y);
+				}
+				if (l.id != "auto")
+					CHECK(right - left > w * 0.98f || bottom - top > h * 0.98f);
+			}
 		}
 	}
+
+	// hit testing
+	PlaceParams p;
+	p.width = 1600;
+	p.height = 900;
+	p.labelHeight = 20;
+	const auto atem = placeTiles("atem", p);
+	CHECK(atem.size() == 6);
+	CHECK(atem[0].kind == TileKind::Preview && atem[1].kind == TileKind::Program);
+	const Box &c = atem[3].cell;
+	CHECK(tileAt(atem, c.x + c.w / 2, c.y + c.h - 2) == 3); // a click on the label counts
+	CHECK(tileAt(atem, -5, -5) == -1);
+
+	CHECK(labelBandHeight(100) == 14.0f);
+	CHECK(labelBandHeight(5000) == 26.0f);
 }
 
 static void testAutoLayout()
 {
-	CHECK(makeAutoLayout(0).tiles.size() == 2);
-	CHECK(makeAutoLayout(0).sceneTileCount() == 0);
-	for (int n : {1, 3, 4, 5, 8, 9, 10, 16, 17, 30, 50, 72}) {
-		const Layout l = makeAutoLayout(n);
-		CHECK(l.sceneTileCount() == n);
-		checkLayoutGeometry(l);
-		// scene tiles are never bigger than a quarter of the width
-		for (const auto &t : l.tiles)
-			if (t.kind == TileKind::Scene)
-				CHECK(t.rect.w <= 0.25f + 1e-4f);
+	for (int n : {0, 1, 2, 3, 4, 5, 8, 9, 10, 16, 17, 30, 50, 120}) {
+		for (const auto &[w, h] : {std::pair<float, float>{1700, 1040}, {800, 450}, {1200, 1600}, {3000, 700}}) {
+			PlaceParams p;
+			p.width = w;
+			p.height = h;
+			p.labelHeight = 18;
+			p.sceneCount = n;
+			const auto tiles = placeTiles("auto", p);
+			checkPlacement(tiles, p);
+			CHECK(tiles.size() >= 2);
+			CHECK(tiles[0].kind == TileKind::Preview && tiles[1].kind == TileKind::Program);
+			// every scene is shown, and none is as big as Preview / Program
+			if (tiles.size() > 2) {
+				CHECK(countScenes(tiles) == n);
+				for (size_t i = 2; i < tiles.size(); ++i)
+					CHECK(tiles[i].picture.w < tiles[0].picture.w);
+				// scenes sit below the top pair
+				CHECK(tiles[2].cell.y >= tiles[0].cell.y + tiles[0].cell.h - 0.01f);
+			}
+		}
 	}
-	// 4 scenes: one row of quarter-width tiles, like ATEM
-	{
-		const Layout l = makeAutoLayout(4);
-		CHECK(near(l.bounds().h, 0.75f));
+	// A typical fullscreen view with 8 scenes uses most of the height.
+	PlaceParams p;
+	p.width = 1680;
+	p.height = 1040;
+	p.labelHeight = 22;
+	p.sceneCount = 8;
+	const auto tiles = placeTiles("auto", p);
+	CHECK(countScenes(tiles) == 8);
+	float top = p.height, bottom = 0;
+	for (const auto &t : tiles) {
+		top = std::min(top, t.cell.y);
+		bottom = std::max(bottom, t.cell.y + t.cell.h);
 	}
-	// 10 scenes: 5 per row, two rows
-	{
-		const Layout l = makeAutoLayout(10);
-		CHECK(near(l.tiles[2].rect.w, 0.2f));
-		CHECK(near(l.bounds().h, 0.9f));
-	}
-	// 2 scenes: centred
-	{
-		const Layout l = makeAutoLayout(2);
-		CHECK(near(l.tiles[2].rect.x, 0.25f) && near(l.tiles[3].rect.x, 0.5f));
-	}
-	// more than fits: capped, never overflows
-	CHECK(makeAutoLayout(500).sceneTileCount() == 72);
-	checkLayoutGeometry(makeAutoLayout(500));
-
-	CHECK(resolveLayout(layoutById("auto"), 9).sceneTileCount() == 9);
-	CHECK(resolveLayout(layoutById("atem"), 9).sceneTileCount() == 4);
-	CHECK(layoutById("nope").id == "atem");
+	CHECK(bottom - top > p.height * 0.9f);
+	CHECK(tiles[0].picture.w > p.width * 0.35f);
 }
 
 static void testVersions()

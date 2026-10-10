@@ -12,7 +12,7 @@
 
 #include <cmath>
 
-// Small painting helpers for OBSViewer's Qt-drawn bars (BroadcastMaster palette).
+// Small painting helpers for OBSViewer's Qt-drawn panels (LiveVoice style).
 namespace obsviewer::paint {
 
 inline QColor col(uint32_t argb)
@@ -50,34 +50,48 @@ inline QFont mono(qreal px, bool bold = false)
 	return f;
 }
 
-// Rounded panel with a hairline border. When `alarm` is Warn/Bad and alarms are
-// on, the border turns amber/red and `blinkOn` makes it pulse.
-inline void panel(QPainter &p, const QRectF &r, Level alarm = Level::Off, bool blinkOn = false,
-		  bool alarmsEnabled = true)
+// LiveVoice panel: dark fill, 1-px border, rounded corners.
+inline void panel(QPainter &p, const QRectF &r, qreal radius = 8.0, uint32_t fill = theme::kPanel,
+		  uint32_t border = theme::kBorder)
 {
 	p.save();
 	p.setRenderHint(QPainter::Antialiasing, true);
-	QColor border = col(theme::kBorder);
-	qreal width = 1.0;
-	QColor fill = col(theme::kPanel);
-	if (alarmsEnabled && (alarm == Level::Warn || alarm == Level::Bad)) {
-		border = levelColor(alarm);
-		width = 1.5;
-		if (alarm == Level::Bad && blinkOn) {
-			QColor tint = border;
-			tint.setAlpha(36);
-			fill = tint; // painted over the panel colour below
-			p.setPen(Qt::NoPen);
-			p.setBrush(col(theme::kPanel));
-			p.drawRoundedRect(r.adjusted(0.5, 0.5, -0.5, -0.5), 5, 5);
-		} else if (!blinkOn) {
-			border.setAlpha(150);
-		}
-	}
-	p.setPen(QPen(border, width));
-	p.setBrush(fill);
-	p.drawRoundedRect(r.adjusted(0.5, 0.5, -0.5, -0.5), 5, 5);
+	p.setPen(QPen(col(border), 1.0));
+	p.setBrush(col(fill));
+	p.drawRoundedRect(r.adjusted(0.5, 0.5, -0.5, -0.5), radius, radius);
 	p.restore();
+}
+
+// Section header: 3 × 12 accent tab and a bold title, LiveVoice style.
+inline void sectionHeader(QPainter &p, const QRectF &r, uint32_t accent, const QString &title, qreal s = 1.0)
+{
+	p.save();
+	p.setRenderHint(QPainter::Antialiasing, true);
+	p.setPen(Qt::NoPen);
+	p.setBrush(col(accent));
+	p.drawRoundedRect(QRectF(r.left() + 10 * s, r.top() + 10 * s, 3 * s, 12 * s), 1.5 * s, 1.5 * s);
+	p.restore();
+	QFont f;
+	f.setPixelSize(std::max(10, static_cast<int>(std::lround(12.5 * s))));
+	f.setWeight(QFont::DemiBold);
+	p.setFont(f);
+	p.setPen(col(theme::kText));
+	p.drawText(QRectF(r.left() + 20 * s, r.top() + 4 * s, r.width() - 28 * s, 24 * s),
+		   static_cast<int>(Qt::AlignLeft | Qt::AlignVCenter), title);
+}
+
+// Meter zone colour (LiveVoice): too quiet, quiet, on target, hot, clipping.
+inline QColor zone(float db, float targetLo, float targetHi, float warnDb)
+{
+	if (db < targetLo - 12.0f)
+		return col(theme::kAccentSlate);
+	if (db < targetLo)
+		return col(theme::kAccentBlue);
+	if (db < targetHi)
+		return col(theme::kGood);
+	if (db < warnDb)
+		return col(theme::kWarn);
+	return col(theme::kBad);
 }
 
 inline QString duration(double seconds)

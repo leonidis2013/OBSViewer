@@ -10,7 +10,7 @@ typedef struct obs_display obs_display_t;
 
 namespace obsviewer {
 
-struct Layout;
+struct LayoutInfo;
 
 // A native Qt widget that owns an obs_display and draws a multiview layout into it.
 class ViewerDisplay : public QWidget {
@@ -48,7 +48,8 @@ private:
 	static void draw(void *param, uint32_t cx, uint32_t cy);
 
 	obs_display_t *display_ = nullptr;
-	std::atomic<const Layout *> layout_;
+	std::atomic<const LayoutInfo *> layout_;
+	std::atomic<float> dpr_{1.0f};
 	bool counted_ = false;
 };
 

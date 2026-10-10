@@ -13,7 +13,7 @@ class QTimer;
 namespace obsviewer {
 
 class ViewerDock;
-class FullscreenWindow;
+class ViewerWindow;
 class SettingsDialog;
 class MasterBusWindow;
 class Updater;
@@ -28,9 +28,13 @@ public:
 	void init();
 	void shutdown();
 
+	// The viewer window is either windowed or fullscreen, never both: opening one
+	// mode switches the existing window to it. screen = null: the last screen used.
+	void openWindowed();
 	void openFullscreen(QScreen *screen);
-	void closeFullscreen();
-	bool fullscreenOpen() const;
+	void toggleViewerMode();
+	void closeViewer();
+	bool viewerOpen() const;
 	// parent: the window asking (so the dialog opens on top of fullscreen), or null for OBS.
 	void openSettings(QWidget *parent = nullptr);
 	void openMasterBus(QWidget *parent = nullptr);
@@ -51,9 +55,10 @@ private:
 	static void onFrontendEvent(enum obs_frontend_event event, void *param);
 	void handleFrontendEvent(enum obs_frontend_event event);
 	void buildToolsMenu();
+	ViewerWindow *ensureViewer();
 
 	QPointer<ViewerDock> dock_;
-	QPointer<FullscreenWindow> fullscreen_;
+	QPointer<ViewerWindow> viewer_;
 	QPointer<SettingsDialog> settings_;
 	QPointer<MasterBusWindow> masterBus_;
 	QPointer<QMenu> toolsMenu_;

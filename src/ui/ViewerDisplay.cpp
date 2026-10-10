@@ -1,5 +1,6 @@
 #include "ui/ViewerDisplay.hpp"
 
+#include "core/Settings.hpp"
 #include "ui/Theme.hpp"
 #include "viewer/Layouts.hpp"
 #include "viewer/Renderer.hpp"
@@ -11,6 +12,8 @@
 #include <QMouseEvent>
 #include <QResizeEvent>
 #include <QWindow>
+
+#include <algorithm>
 
 namespace obsviewer {
 
@@ -65,6 +68,7 @@ QSize ViewerDisplay::pixelSize() const
 	return size() * devicePixelRatioF();
 }
 
+
 void ViewerDisplay::createDisplay()
 {
 	if (display_ || !windowHandle() || !windowHandle()->isExposed())
@@ -73,6 +77,7 @@ void ViewerDisplay::createDisplay()
 	const QSize size = pixelSize();
 	if (size.width() <= 0 || size.height() <= 0)
 		return;
+	dpr_.store(static_cast<float>(devicePixelRatioF()));
 
 	gs_init_data info = {};
 	info.cx = static_cast<uint32_t>(size.width());
@@ -81,12 +86,12 @@ void ViewerDisplay::createDisplay()
 	info.zsformat = GS_ZS_NONE;
 #ifdef __APPLE__
 	info.window.view = reinterpret_cast<id>(windowHandle()->winId());
-#else
+#elif !defined(OBSVIEWER_SYNTAX_CHECK)
 #error "OBSViewer currently targets macOS only"
 #endif
 
-	// obs_display_create takes 0xAABBGGRR; theme bg #0E1115
-	display_ = obs_display_create(&info, 0xFF15110E);
+	// obs_display_create takes 0xAABBGGRR; theme bg #0D1015
+	display_ = obs_display_create(&info, 0xFF15100D);
 	if (display_)
 		obs_display_add_draw_callback(display_, &ViewerDisplay::draw, this);
 }
@@ -103,7 +108,7 @@ void ViewerDisplay::destroyDisplay()
 void ViewerDisplay::draw(void *param, uint32_t cx, uint32_t cy)
 {
 	auto *self = static_cast<ViewerDisplay *>(param);
-	Renderer::render(*self->layout_.load(), cx, cy);
+	Renderer::render(self->layout_.load()->id, cx, cy, self->dpr_.load());
 }
 
 void ViewerDisplay::paintEvent(QPaintEvent *event)
@@ -115,6 +120,7 @@ void ViewerDisplay::paintEvent(QPaintEvent *event)
 void ViewerDisplay::resizeEvent(QResizeEvent *event)
 {
 	QWidget::resizeEvent(event);
+	dpr_.store(static_cast<float>(devicePixelRatioF()));
 	createDisplay();
 	if (display_ && isVisible()) {
 		const QSize size = pixelSize();
@@ -147,14 +153,21 @@ void ViewerDisplay::hideEvent(QHideEvent *event)
 
 bool ViewerDisplay::tileAt(const QPointF &pos, int &kind, int &sceneIndex) const
 {
+	// Same placement the renderer uses, in the same logical pixels.
 	const ViewerState &state = ViewerState::get();
-	const Layout layout = resolveLayout(*layout_.load(), state.sceneCount());
-	const TileHit hit = Renderer::hitTest(layout, state.canvasWidth(), state.canvasHeight(), width(), height(),
-					      pos.x(), pos.y());
-	if (hit.tile < 0)
+	PlaceParams params;
+	params.width = static_cast<float>(width());
+	params.height = static_cast<float>(height());
+	params.aspect = static_cast<float>(state.canvasWidth()) / static_cast<float>(std::max<uint32_t>(1, state.canvasHeight()));
+	params.labelHeight = Settings::get().showLabels ? labelBandHeight(params.height) : 0.0f;
+	params.gap = 4.0f;
+	params.sceneCount = state.sceneCount();
+	const std::vector<PlacedTile> tiles = placeTiles(layout_.load()->id, params);
+	const int hit = obsviewer::tileAt(tiles, static_cast<float>(pos.x()), static_cast<float>(pos.y()));
+	if (hit < 0)
 		return false;
-	kind = static_cast<int>(hit.kind);
-	sceneIndex = hit.sceneIndex;
+	kind = static_cast<int>(tiles[static_cast<size_t>(hit)].kind);
+	sceneIndex = tiles[static_cast<size_t>(hit)].sceneIndex;
 	return true;
 }
 

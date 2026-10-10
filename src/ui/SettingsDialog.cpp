@@ -31,7 +31,7 @@ namespace {
 QComboBox *makeLayoutBox(QWidget *parent)
 {
 	auto *box = new QComboBox(parent);
-	for (const Layout &layout : allLayouts())
+	for (const LayoutInfo &layout : allLayouts())
 		box->addItem(QString::fromStdString(layout.name), QString::fromStdString(layout.id));
 	return box;
 }
@@ -52,34 +52,39 @@ SettingsDialog::SettingsDialog(QWidget *parent) : QDialog(parent)
 	setMinimumWidth(520);
 
 	// ---- Multiview ----
-	auto *viewGroup = new QGroupBox(tr("MULTIVIEW"), this);
+	auto *viewGroup = new QGroupBox(tr("Multiview"), this);
 	auto *viewForm = new QFormLayout(viewGroup);
-	dockLayout_ = makeLayoutBox(viewGroup);
 	windowLayout_ = makeLayoutBox(viewGroup);
-	showLabels_ = new QCheckBox(tr("Show tile labels"), viewGroup);
-	viewForm->addRow(tr("Dock layout"), dockLayout_);
-	viewForm->addRow(tr("Fullscreen layout"), windowLayout_);
-	viewForm->addRow(QString(), showLabels_);
-	showSidebar_ = new QCheckBox(tr("Show the side bar (stream, record, audio, health)"), viewGroup);
-	showNetbar_ = new QCheckBox(tr("Show the network bar"), viewGroup);
-	alarms_ = new QCheckBox(tr("Flash sections that need attention"), viewGroup);
-	viewForm->addRow(QString(), showSidebar_);
-	viewForm->addRow(QString(), showNetbar_);
-	viewForm->addRow(QString(), alarms_);
-	tileMeters_ = new QCheckBox(tr("Show audio meters on tiles"), viewGroup);
-	viewForm->addRow(QString(), tileMeters_);
-	fullscreenToolbar_ = new QCheckBox(tr("Show the toolbar in fullscreen"), viewGroup);
-	viewForm->addRow(QString(), fullscreenToolbar_);
+	dockLayout_ = makeLayoutBox(viewGroup);
+	layoutHelp_ = new QLabel(viewGroup);
+	layoutHelp_->setWordWrap(true);
+	layoutHelp_->setProperty("dim", true);
 	clickAction_ = new QComboBox(viewGroup);
 	clickAction_->addItem(tr("Does nothing"), Settings::ClickOff);
 	clickAction_->addItem(tr("Sends the scene to Preview"), Settings::ClickPreview);
 	clickAction_->addItem(tr("Cuts the scene to Program"), Settings::ClickProgram);
 	clickAction_->setToolTip(tr("Outside Studio Mode both choices switch the scene. "
 				    "Double-click the Preview tile to take it to Program."));
-	viewForm->addRow(tr("Clicking a tile"), clickAction_);
+	showLabels_ = new QCheckBox(tr("Show names below the views"), viewGroup);
+	tileMeters_ = new QCheckBox(tr("Show audio meters on the views"), viewGroup);
+	showSidebar_ = new QCheckBox(tr("Show the side bar (health, stream, network, record, audio)"), viewGroup);
+	alarms_ = new QCheckBox(tr("Flash the health light when something is wrong"), viewGroup);
+	viewForm->addRow(tr("Window layout"), windowLayout_);
+	viewForm->addRow(tr("Dock layout"), dockLayout_);
+	viewForm->addRow(QString(), layoutHelp_);
+	viewForm->addRow(tr("Clicking a view"), clickAction_);
+	viewForm->addRow(QString(), showLabels_);
+	viewForm->addRow(QString(), tileMeters_);
+	viewForm->addRow(QString(), showSidebar_);
+	viewForm->addRow(QString(), alarms_);
+	auto describe = [this](QComboBox *box) {
+		layoutHelp_->setText(QString::fromStdString(layoutById(box->currentData().toString().toStdString()).description));
+	};
+	connect(windowLayout_, &QComboBox::currentIndexChanged, this, [this, describe] { describe(windowLayout_); });
+	connect(dockLayout_, &QComboBox::currentIndexChanged, this, [this, describe] { describe(dockLayout_); });
 
 	// ---- Audio ----
-	auto *audioGroup = new QGroupBox(tr("AUDIO"), this);
+	auto *audioGroup = new QGroupBox(tr("Programme audio"), this);
 	auto *audioForm = new QFormLayout(audioGroup);
 	loudnessPreset_ = new QComboBox(audioGroup);
 	for (int i = 0; i < bm::kNumLoudnessPresets; ++i) {
@@ -113,7 +118,7 @@ SettingsDialog::SettingsDialog(QWidget *parent) : QDialog(parent)
 		[this](int index) { customTarget_->setEnabled(index == bm::kCustomPresetIndex); });
 
 	// ---- Updates ----
-	auto *updateGroup = new QGroupBox(tr("UPDATES"), this);
+	auto *updateGroup = new QGroupBox(tr("Updates"), this);
 	auto *updateForm = new QFormLayout(updateGroup);
 
 	auto *version = new QLabel(tr("OBSViewer %1").arg(QString::fromUtf8(PLUGIN_VERSION)), updateGroup);
@@ -188,7 +193,6 @@ void SettingsDialog::load()
 	selectData(windowLayout_, s.windowLayout);
 	showLabels_->setChecked(s.showLabels);
 	showSidebar_->setChecked(s.showSidebar);
-	showNetbar_->setChecked(s.showNetbar);
 	alarms_->setChecked(s.alarms);
 	tileMeters_->setChecked(s.tileMeters);
 	loudnessPreset_->setCurrentIndex(std::clamp(s.loudnessPreset, 0, bm::kNumLoudnessPresets - 1));
@@ -196,7 +200,7 @@ void SettingsDialog::load()
 	customTarget_->setEnabled(loudnessPreset_->currentIndex() == bm::kCustomPresetIndex);
 	meterTrack_->setCurrentIndex(std::clamp(s.meterTrack, 0, 6));
 	clickAction_->setCurrentIndex(std::max(0, clickAction_->findData(s.clickAction)));
-	fullscreenToolbar_->setChecked(s.fullscreenToolbar);
+	layoutHelp_->setText(QString::fromStdString(layoutById(s.windowLayout).description));
 	autoCheck_->setChecked(s.updateAutoCheck);
 	prereleases_->setChecked(s.updateIncludePrereleases);
 	repo_->setText(QString::fromStdString(s.updateRepo));
@@ -217,14 +221,12 @@ void SettingsDialog::apply()
 	s.windowLayout = windowLayout_->currentData().toString().toStdString();
 	s.showLabels = showLabels_->isChecked();
 	s.showSidebar = showSidebar_->isChecked();
-	s.showNetbar = showNetbar_->isChecked();
 	s.alarms = alarms_->isChecked();
 	s.tileMeters = tileMeters_->isChecked();
 	s.loudnessPreset = loudnessPreset_->currentIndex();
 	s.customTargetLufs = static_cast<float>(customTarget_->value());
 	s.meterTrack = meterTrack_->currentData().toInt();
 	s.clickAction = clickAction_->currentData().toInt();
-	s.fullscreenToolbar = fullscreenToolbar_->isChecked();
 	s.updateAutoCheck = autoCheck_->isChecked();
 	s.updateIncludePrereleases = prereleases_->isChecked();
 

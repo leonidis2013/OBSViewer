@@ -1,134 +1,210 @@
 #include "viewer/Layouts.hpp"
 
 #include <algorithm>
+#include <cmath>
+#include <utility>
 
 namespace obsviewer {
 
 namespace {
 
-Tile program(float x, float y, float s)
+using Item = std::pair<TileKind, int>;
+
+struct Builder {
+	float aspect;
+	float label;
+	float gap;
+	std::vector<PlacedTile> tiles;
+
+	float tileHeight(float w) const { return w / aspect + label; }
+
+	void add(TileKind kind, int scene, float x, float y, float w)
+	{
+		PlacedTile t;
+		t.kind = kind;
+		t.sceneIndex = scene;
+		const float ph = w / aspect;
+		t.cell = Box{x, y, w, ph + label};
+		t.picture = Box{x, y, w, ph};
+		t.label = Box{x, y + ph, w, label};
+		tiles.push_back(t);
+	}
+
+	// Equal tiles side by side, `width` wide in total. Returns the row height.
+	float row(float x, float y, float width, const std::vector<Item> &items)
+	{
+		const int k = static_cast<int>(items.size());
+		if (k == 0)
+			return 0.0f;
+		const float w = (width - gap * static_cast<float>(k - 1)) / static_cast<float>(k);
+		for (int i = 0; i < k; ++i)
+			add(items[static_cast<size_t>(i)].first, items[static_cast<size_t>(i)].second,
+			    x + static_cast<float>(i) * (w + gap), y, w);
+		return tileHeight(w);
+	}
+};
+
+std::vector<Item> scenes(int first, int count)
 {
-	return Tile{TileKind::Program, -1, {x, y, s, s}};
+	std::vector<Item> v;
+	for (int i = 0; i < count; ++i)
+		v.emplace_back(TileKind::Scene, first + i);
+	return v;
 }
 
-Tile preview(float x, float y, float s)
+const std::vector<Item> kTop = {{TileKind::Preview, -1}, {TileKind::Program, -1}};
+
+// Fixed presets, built for a total width `s` from (0, 0). Returns the height used.
+float buildPreset(const std::string &id, float s, Builder &b)
 {
-	return Tile{TileKind::Preview, -1, {x, y, s, s}};
+	if (id == "atem") {
+		float y = b.row(0, 0, s, kTop) + b.gap;
+		return y + b.row(0, y, s, scenes(0, 4));
+	}
+	if (id == "classic8") {
+		float y = b.row(0, 0, s, kTop) + b.gap;
+		y += b.row(0, y, s, scenes(0, 4)) + b.gap;
+		return y + b.row(0, y, s, scenes(4, 4));
+	}
+	if (id == "bigprogram") {
+		// Program large on the left; Preview and two scenes stacked on the right.
+		const float colW = (s - b.gap) / 4.0f;
+		const float bigW = s - b.gap - colW;
+		const float colTile = b.tileHeight(colW);
+		const float colH = 3.0f * colTile + 2.0f * b.gap;
+		const float bigH = b.tileHeight(bigW);
+		const float top = std::max(colH, bigH);
+		b.add(TileKind::Program, -1, 0, (top - bigH) / 2.0f, bigW);
+		const float cx = bigW + b.gap;
+		float cy = (top - colH) / 2.0f;
+		b.add(TileKind::Preview, -1, cx, cy, colW);
+		cy += colTile + b.gap;
+		b.add(TileKind::Scene, 0, cx, cy, colW);
+		cy += colTile + b.gap;
+		b.add(TileKind::Scene, 1, cx, cy, colW);
+		const float y = top + b.gap;
+		return y + b.row(0, y, s, scenes(2, 4));
+	}
+	if (id == "grid3" || id == "grid4") {
+		const int n = id == "grid3" ? 3 : 4;
+		float y = 0;
+		for (int r = 0; r < n; ++r) {
+			y += b.row(0, y, s, scenes(r * n, n));
+			if (r + 1 < n)
+				y += b.gap;
+		}
+		return y;
+	}
+	// "two": just Preview and Program (auto with no scenes)
+	return b.row(0, 0, s, kTop);
 }
 
-Tile scene(int index, float x, float y, float s)
+void shift(std::vector<PlacedTile> &tiles, float dx, float dy)
 {
-	return Tile{TileKind::Scene, index, {x, y, s, s}};
+	for (auto &t : tiles)
+		for (Box *box : {&t.cell, &t.picture, &t.label}) {
+			box->x += dx;
+			box->y += dy;
+		}
 }
 
-Layout makeAtem()
+// Largest width whose layout still fits the view, then centred.
+std::vector<PlacedTile> fitPreset(const std::string &id, const PlaceParams &p)
 {
-	Layout l{"atem", "ATEM (2 + 4)", {}};
-	l.tiles.push_back(preview(0.0f, 0.0f, 0.5f));
-	l.tiles.push_back(program(0.5f, 0.0f, 0.5f));
-	for (int i = 0; i < 4; ++i)
-		l.tiles.push_back(scene(i, 0.25f * i, 0.5f, 0.25f));
-	return l;
+	auto build = [&](float s, Builder &b) { return buildPreset(id, s, b); };
+	Builder probe{p.aspect, p.labelHeight, p.gap, {}};
+	float s = p.width;
+	if (build(s, probe) > p.height) {
+		float lo = 0.0f, hi = p.width;
+		for (int i = 0; i < 32; ++i) {
+			const float mid = (lo + hi) / 2.0f;
+			Builder b{p.aspect, p.labelHeight, p.gap, {}};
+			(build(mid, b) <= p.height ? lo : hi) = mid;
+		}
+		s = lo;
+	}
+	Builder b{p.aspect, p.labelHeight, p.gap, {}};
+	const float h = build(s, b);
+	shift(b.tiles, (p.width - s) / 2.0f, std::max(0.0f, (p.height - h) / 2.0f));
+	return std::move(b.tiles);
 }
 
-Layout makeClassic()
+// "Auto": Preview and Program large on top, every scene in a grid below. Tries a
+// range of sizes for the top pair and column counts for the scenes, and keeps the
+// arrangement that shows the most picture (Preview / Program count extra).
+std::vector<PlacedTile> placeAuto(const PlaceParams &p)
 {
-	Layout l{"classic8", "Classic (2 + 8)", {}};
-	l.tiles.push_back(preview(0.0f, 0.0f, 0.5f));
-	l.tiles.push_back(program(0.5f, 0.0f, 0.5f));
-	for (int i = 0; i < 8; ++i)
-		l.tiles.push_back(scene(i, 0.25f * (i % 4), 0.5f + 0.25f * (i / 4), 0.25f));
-	return l;
-}
+	const int n = std::max(0, p.sceneCount);
+	if (n == 0)
+		return fitPreset("two", p);
 
-Layout makeBigProgram()
-{
-	Layout l{"bigprogram", "Big Program (1 + 1 + 6)", {}};
-	l.tiles.push_back(program(0.0f, 0.0f, 0.75f));
-	l.tiles.push_back(preview(0.75f, 0.0f, 0.25f));
-	l.tiles.push_back(scene(0, 0.75f, 0.25f, 0.25f));
-	l.tiles.push_back(scene(1, 0.75f, 0.5f, 0.25f));
-	for (int i = 0; i < 4; ++i)
-		l.tiles.push_back(scene(2 + i, 0.25f * i, 0.75f, 0.25f));
-	return l;
-}
+	const float W = p.width, H = p.height, a = p.aspect, L = p.labelHeight, g = p.gap;
+	float bestScore = -1.0f, bestTop = 0.0f, bestScene = 0.0f;
+	int bestCols = 1;
+	constexpr int kSteps = 80;
+	for (int step = 0; step <= kSteps; ++step) {
+		const float rowW = W * (1.0f - 0.75f * static_cast<float>(step) / kSteps); // 100% … 25% of the width
+		const float topW = (rowW - g) / 2.0f;
+		if (topW <= 0.0f)
+			continue;
+		const float topH = topW / a + L;
+		const float rest = H - topH - g;
+		if (rest <= L + 4.0f)
+			continue;
+		for (int cols = 1; cols <= n; ++cols) {
+			const int rows = (n + cols - 1) / cols;
+			const float byWidth = (W - g * static_cast<float>(cols - 1)) / static_cast<float>(cols);
+			const float byHeight = ((rest - g * static_cast<float>(rows - 1)) / static_cast<float>(rows) - L) * a;
+			float sw = std::min({byWidth, byHeight, topW * 0.75f});
+			if (sw <= 0.0f)
+				continue;
+			const float score = 2.0f * 1.5f * topW * topW + static_cast<float>(n) * sw * sw;
+			if (score > bestScore) {
+				bestScore = score;
+				bestTop = topW;
+				bestScene = sw;
+				bestCols = cols;
+			}
+		}
+	}
+	if (bestScore < 0.0f)
+		return fitPreset("two", p); // too small for scenes: just the pair
 
-Layout makeGrid(const char *id, const char *name, int n)
-{
-	Layout l{id, name, {}};
-	const float s = 1.0f / static_cast<float>(n);
-	for (int i = 0; i < n * n; ++i)
-		l.tiles.push_back(scene(i, s * (i % n), s * (i / n), s));
-	return l;
+	Builder b{a, L, g, {}};
+	const float topRow = 2.0f * bestTop + g;
+	b.add(TileKind::Preview, -1, (W - topRow) / 2.0f, 0, bestTop);
+	b.add(TileKind::Program, -1, (W - topRow) / 2.0f + bestTop + g, 0, bestTop);
+	float y = b.tileHeight(bestTop) + g;
+	const int rows = (n + bestCols - 1) / bestCols;
+	for (int r = 0; r < rows; ++r) {
+		const int inRow = std::min(bestCols, n - r * bestCols);
+		const float rowW = static_cast<float>(inRow) * bestScene + g * static_cast<float>(inRow - 1);
+		const float x0 = (W - rowW) / 2.0f;
+		for (int c = 0; c < inRow; ++c)
+			b.add(TileKind::Scene, r * bestCols + c, x0 + static_cast<float>(c) * (bestScene + g), y, bestScene);
+		y += b.tileHeight(bestScene) + (r + 1 < rows ? g : 0.0f);
+	}
+	shift(b.tiles, 0.0f, std::max(0.0f, (H - y) / 2.0f));
+	return std::move(b.tiles);
 }
 
 } // namespace
 
-NRect Layout::bounds() const
+const std::vector<LayoutInfo> &allLayouts()
 {
-	NRect b{0, 0, 0, 0};
-	for (const auto &t : tiles) {
-		b.w = std::max(b.w, t.rect.x + t.rect.w);
-		b.h = std::max(b.h, t.rect.y + t.rect.h);
-	}
-	if (b.w <= 0 || b.h <= 0)
-		b = NRect{0, 0, 1, 1};
-	return b;
-}
-
-int Layout::sceneTileCount() const
-{
-	int count = 0;
-	for (const auto &t : tiles)
-		if (t.kind == TileKind::Scene)
-			++count;
-	return count;
-}
-
-Layout makeAutoLayout(int sceneCount)
-{
-	Layout l{kAutoLayoutId, "Auto (2 + all scenes)", {}};
-	l.tiles.push_back(preview(0.0f, 0.0f, 0.5f));
-	l.tiles.push_back(program(0.5f, 0.0f, 0.5f));
-	const int n = std::max(0, sceneCount);
-	if (n == 0)
-		return l;
-
-	// Fewest columns (min 4) whose rows still fit in the lower half.
-	int cols = 4;
-	while (cols < 12 && static_cast<float>((n + cols - 1) / cols) / static_cast<float>(cols) > 0.5f)
-		++cols;
-	const float s = 1.0f / static_cast<float>(cols);
-	const int shown = std::min(n, cols * (cols / 2)); // what fits in the lower half
-	for (int i = 0; i < shown; ++i) {
-		const int row = i / cols;
-		const int col = i % cols;
-		const int inRow = std::min(cols, shown - row * cols);
-		const float x0 = (1.0f - static_cast<float>(inRow) * s) / 2.0f; // centre short rows
-		l.tiles.push_back(scene(i, x0 + static_cast<float>(col) * s, 0.5f + static_cast<float>(row) * s, s));
-	}
-	return l;
-}
-
-Layout resolveLayout(const Layout &layout, int sceneCount)
-{
-	return layout.id == kAutoLayoutId ? makeAutoLayout(sceneCount) : layout;
-}
-
-const std::vector<Layout> &allLayouts()
-{
-	static const std::vector<Layout> layouts = {
-		makeAutoLayout(4),
-		makeAtem(),
-		makeClassic(),
-		makeBigProgram(),
-		makeGrid("grid3", "Scenes 3 × 3", 3),
-		makeGrid("grid4", "Scenes 4 × 4", 4),
+	static const std::vector<LayoutInfo> layouts = {
+		{"auto", "Dynamic (Preview + Program, all scenes)",
+		 "Preview and Program large on top; every scene below, sized to fill the window.", -1},
+		{"atem", "ATEM (2 + 4)", "Preview and Program on top, four scenes below.", 4},
+		{"classic8", "Classic (2 + 8)", "Preview and Program on top, eight scenes below.", 8},
+		{"bigprogram", "Big Program (1 + 1 + 6)", "Large Program, Preview and six scenes around it.", 6},
+		{"grid3", "Scenes 3 × 3", "Nine scenes, no Preview or Program.", 9},
+		{"grid4", "Scenes 4 × 4", "Sixteen scenes, no Preview or Program.", 16},
 	};
 	return layouts;
 }
 
-const Layout &layoutById(const std::string &id)
+const LayoutInfo &layoutById(const std::string &id)
 {
 	for (const auto &l : allLayouts())
 		if (l.id == id)
@@ -137,6 +213,27 @@ const Layout &layoutById(const std::string &id)
 		if (l.id == kDefaultLayoutId)
 			return l;
 	return allLayouts().front();
+}
+
+std::vector<PlacedTile> placeTiles(const std::string &layoutId, const PlaceParams &params)
+{
+	if (params.width <= 1.0f || params.height <= 1.0f || params.aspect <= 0.0f)
+		return {};
+	const std::string &id = layoutById(layoutId).id;
+	return id == kAutoLayoutId ? placeAuto(params) : fitPreset(id, params);
+}
+
+int tileAt(const std::vector<PlacedTile> &tiles, float x, float y)
+{
+	for (size_t i = 0; i < tiles.size(); ++i)
+		if (tiles[i].cell.contains(x, y))
+			return static_cast<int>(i);
+	return -1;
+}
+
+float labelBandHeight(float viewHeight)
+{
+	return std::clamp(std::round(viewHeight * 0.028f), 14.0f, 26.0f);
 }
 
 } // namespace obsviewer

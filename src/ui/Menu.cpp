@@ -19,7 +19,7 @@ void addLayoutActions(QMenu *menu, const std::string &currentId, const std::func
 {
 	auto *group = new QActionGroup(menu);
 	group->setExclusive(true);
-	for (const Layout &layout : allLayouts()) {
+	for (const LayoutInfo &layout : allLayouts()) {
 		QAction *action = menu->addAction(QString::fromStdString(layout.name));
 		action->setCheckable(true);
 		action->setChecked(layout.id == currentId);
@@ -87,7 +87,7 @@ void addSceneActions(QMenu *menu, int action)
 } // namespace
 
 void buildViewerMenu(QMenu &menu, const std::string &layoutId, const std::function<void(const std::string &)> &onLayout,
-		     bool fullscreen)
+		     MenuContext context)
 {
 	QMenu *layouts = menu.addMenu(QStringLiteral("Layout"));
 	addLayoutActions(layouts, layoutId, [onLayout](const std::string &id) { later([onLayout, id] { onLayout(id); }); });
@@ -99,55 +99,31 @@ void buildViewerMenu(QMenu &menu, const std::string &layoutId, const std::functi
 		addSceneActions(menu.addMenu(QStringLiteral("Switch Scene")), Settings::ClickProgram);
 	}
 
-	QMenu *click = menu.addMenu(QStringLiteral("Clicking a Tile"));
-	auto *group = new QActionGroup(click);
-	const std::pair<int, const char *> options[] = {{Settings::ClickOff, "Does Nothing"},
-							{Settings::ClickPreview, "Sends It to Preview"},
-							{Settings::ClickProgram, "Cuts It to Program"}};
-	for (const auto &[value, text] : options) {
-		QAction *a = click->addAction(QString::fromUtf8(text));
-		a->setCheckable(true);
-		a->setChecked(Settings::get().clickAction == value);
-		group->addAction(a);
-		const int v = value;
-		QObject::connect(a, &QAction::triggered, click, [v] {
-			later([v] {
-				Settings::get().clickAction = v;
-				Settings::get().save();
-				App::get().applySettings();
-			});
-		});
-	}
-
 	menu.addSeparator();
-	if (fullscreen) {
-		QMenu *screens = menu.addMenu(QStringLiteral("Move to Screen"));
-		addScreenActions(screens, Settings::get().windowScreen, [](QScreen *screen) {
-			QPointer<QScreen> guarded(screen);
-			later([guarded] {
-				if (guarded)
-					App::get().openFullscreen(guarded.data());
-			});
+	auto openFullscreenOn = [](QScreen *screen) {
+		QPointer<QScreen> guarded(screen);
+		later([guarded] {
+			if (guarded)
+				App::get().openFullscreen(guarded.data());
 		});
-		QAction *toolbar = menu.addAction(QStringLiteral("Show Toolbar"));
-		toolbar->setCheckable(true);
-		toolbar->setChecked(Settings::get().fullscreenToolbar);
-		QObject::connect(toolbar, &QAction::triggered, &menu, [](bool on) {
-			later([on] {
-				Settings::get().fullscreenToolbar = on;
-				Settings::get().save();
-				App::get().applySettings();
-			});
-		});
-	} else {
-		QMenu *screens = menu.addMenu(QStringLiteral("Open Fullscreen"));
-		addScreenActions(screens, Settings::get().windowScreen, [](QScreen *screen) {
-			QPointer<QScreen> guarded(screen);
-			later([guarded] {
-				if (guarded)
-					App::get().openFullscreen(guarded.data());
-			});
-		});
+	};
+	switch (context) {
+	case MenuContext::Dock:
+		QObject::connect(menu.addAction(QStringLiteral("Open in Window")), &QAction::triggered, &menu,
+				 [] { later([] { App::get().openWindowed(); }); });
+		addScreenActions(menu.addMenu(QStringLiteral("Open Fullscreen")), Settings::get().windowScreen,
+				 openFullscreenOn);
+		break;
+	case MenuContext::Window:
+		addScreenActions(menu.addMenu(QStringLiteral("Fullscreen On")), Settings::get().windowScreen,
+				 openFullscreenOn);
+		break;
+	case MenuContext::Fullscreen:
+		QObject::connect(menu.addAction(QStringLiteral("Exit Fullscreen")), &QAction::triggered, &menu,
+				 [] { later([] { App::get().openWindowed(); }); });
+		addScreenActions(menu.addMenu(QStringLiteral("Move to Screen")), Settings::get().windowScreen,
+				 openFullscreenOn);
+		break;
 	}
 
 	QWidget *owner = menu.parentWidget() ? menu.parentWidget()->window() : nullptr;
@@ -156,9 +132,11 @@ void buildViewerMenu(QMenu &menu, const std::string &layoutId, const std::functi
 			 [guardedOwner] { later([guardedOwner] { App::get().openMasterBus(guardedOwner.data()); }); });
 	QObject::connect(menu.addAction(QStringLiteral("Settings…")), &QAction::triggered, &menu,
 			 [guardedOwner] { later([guardedOwner] { App::get().openSettings(guardedOwner.data()); }); });
-	if (fullscreen)
-		QObject::connect(menu.addAction(QStringLiteral("Exit Fullscreen")), &QAction::triggered, &menu,
-				 [] { later([] { App::get().closeFullscreen(); }); });
+	if (context != MenuContext::Dock) {
+		menu.addSeparator();
+		QObject::connect(menu.addAction(QStringLiteral("Close OBSViewer Window")), &QAction::triggered, &menu,
+				 [] { later([] { App::get().closeViewer(); }); });
+	}
 }
 
 ScreenMenu::ScreenMenu(const QString &title, std::function<void(QScreen *)> onPick, QWidget *parent)

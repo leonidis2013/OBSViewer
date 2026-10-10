@@ -6,21 +6,21 @@
 
 namespace obsviewer {
 
-class NetworkBar;
 class SidePanel;
 class ViewerDisplay;
 
-// The full OBSViewer view: multiview tiles, the right-hand control bar and the
-// bottom network bar. Used by both the dock and the fullscreen window.
+// The full OBSViewer view: multiview tiles and the right-hand control bar.
+// Used by both the dock and the viewer window.
 class MultiviewPanel : public QWidget {
 public:
 	explicit MultiviewPanel(bool compact, QWidget *parent = nullptr);
 
 	ViewerDisplay *display() const { return display_; }
+	SidePanel *sidePanel() const { return side_; }
 	void setLayoutId(const std::string &id);
 	std::string layoutId() const;
 
-	// Show / hide the bars from Settings.
+	// Show / hide the side bar from Settings.
 	void applySettings();
 
 protected:
@@ -29,7 +29,6 @@ protected:
 private:
 	ViewerDisplay *display_ = nullptr;
 	SidePanel *side_ = nullptr;
-	NetworkBar *net_ = nullptr;
 };
 
 } // namespace obsviewer

@@ -25,7 +25,6 @@ private:
 	QComboBox *windowLayout_ = nullptr;
 	QCheckBox *showLabels_ = nullptr;
 	QCheckBox *showSidebar_ = nullptr;
-	QCheckBox *showNetbar_ = nullptr;
 	QCheckBox *alarms_ = nullptr;
 	QCheckBox *tileMeters_ = nullptr;
 
@@ -33,7 +32,7 @@ private:
 	QDoubleSpinBox *customTarget_ = nullptr;
 	QComboBox *meterTrack_ = nullptr;
 	QComboBox *clickAction_ = nullptr;
-	QCheckBox *fullscreenToolbar_ = nullptr;
+	QLabel *layoutHelp_ = nullptr;
 
 	QCheckBox *autoCheck_ = nullptr;
 	QCheckBox *prereleases_ = nullptr;

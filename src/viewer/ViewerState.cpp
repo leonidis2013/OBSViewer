@@ -15,8 +15,8 @@ namespace {
 constexpr float kTileLabelScale = 0.034f;
 constexpr float kStatusLabelScale = 0.045f;
 
-// text_ft2_source colours are 0xAABBGGRR. Theme "text" #E9EDF2.
-constexpr long long kLabelColor = 0xFFF2EDE9;
+// text_ft2_source colours are 0xAABBGGRR. Theme "text" #D8DEE6.
+constexpr long long kLabelColor = 0xFFE6DED8;
 
 std::string sourceName(obs_source_t *source)
 {

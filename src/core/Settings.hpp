@@ -8,17 +8,15 @@ namespace obsviewer {
 // Plugin settings, stored as JSON in OBS's plugin config folder.
 // Read and written on the Qt main thread only.
 struct Settings {
-	std::string dockLayout = "atem";
-	std::string windowLayout = "atem";
-	std::string windowScreen; // QScreen::name(); empty = primary screen
+	std::string dockLayout = "auto";
+	std::string windowLayout = "auto"; // the viewer window (windowed or fullscreen)
+	std::string windowScreen;          // QScreen::name() for fullscreen; empty = primary screen
+	std::string windowGeometry;        // QWidget::saveGeometry() of the windowed viewer, base64
 	bool showLabels = true;
-	int clickAction = 1;           // tile click: 0 = off, 1 = to Preview, 2 = to Program
-	bool fullscreenToolbar = true; // toolbar along the top of the fullscreen view
+	int clickAction = 1; // tile click: 0 = off, 1 = to Preview, 2 = to Program
 
-	// Bars around the multiview
-	bool showSidebar = true; // stream / record / audio / health on the right
-	bool showNetbar = true;  // network and loudness history along the bottom
-	bool alarms = true;      // flash sections that need attention
+	bool showSidebar = true; // health, stream, network, record and audio on the right
+	bool alarms = true;      // flash the health light when something is wrong
 	bool tileMeters = true;  // audio meters on each tile
 
 	// Audio

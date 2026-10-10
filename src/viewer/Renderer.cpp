@@ -23,11 +23,11 @@ struct Rect {
 	float x, y, w, h;
 };
 
-// Maps canvas coordinates to window pixels.
+// Maps layout coordinates to device pixels.
 struct Frame {
 	float fw = 1920, fh = 1080; // canvas size (OBS base resolution)
-	float ox = 0, oy = 0;       // window offset of the letterboxed multiview
-	float scale = 1;            // canvas units → window pixels
+	float ox = 0, oy = 0;       // device-pixel offset
+	float scale = 1;            // layout units → device pixels
 };
 
 void startRegion(int vx, int vy, int vcx, int vcy, float left, float right, float top, float bottom)
@@ -71,22 +71,6 @@ void drawFrame(const Rect &r, float t, uint32_t argb)
 	drawBox(r.x + r.w - t, r.y + t, t, r.h - 2 * t, argb);
 }
 
-Rect inset(const Rect &r, float d)
-{
-	return Rect{r.x + d, r.y + d, std::max(0.0f, r.w - 2 * d), std::max(0.0f, r.h - 2 * d)};
-}
-
-// Largest rect with the canvas aspect ratio, centred in r.
-Rect fitAspect(const Rect &r, float aspect)
-{
-	float w = r.w, h = r.w / aspect;
-	if (h > r.h) {
-		h = r.h;
-		w = r.h * aspect;
-	}
-	return Rect{r.x + (r.w - w) / 2, r.y + (r.h - h) / 2, w, h};
-}
-
 // Render something drawn in canvas space (0..fw, 0..fh) into rect r.
 template<typename Fn> void renderScaled(const Frame &f, const Rect &r, Fn &&draw)
 {
@@ -116,22 +100,7 @@ void drawLabelAt(obs_source_t *label, float x, float y, float s, uint32_t plate,
 	gs_matrix_pop();
 }
 
-// Bottom-centre label inside the picture (ATEM style), sized to the tile.
-void drawTileLabel(obs_source_t *label, const Rect &r, float pad, float maxHeight)
-{
-	if (!label)
-		return;
-	const float lw = static_cast<float>(obs_source_get_width(label));
-	const float lh = static_cast<float>(obs_source_get_height(label));
-	if (lw <= 0.0f || lh <= 0.0f)
-		return;
-	const float s = std::min({1.0f, (r.w - 4 * pad) / lw, maxHeight / lh});
-	const float x = r.x + (r.w - lw * s) / 2;
-	const float y = r.y + r.h - lh * s - pad;
-	drawLabelAt(label, x, y, s, theme::kLabelPlate, pad * 0.6f);
-}
-
-// Top-left note inside the picture.
+// Top-left note inside the picture ("STUDIO MODE OFF").
 void drawTileNote(obs_source_t *label, const Rect &r, float pad, float maxHeight)
 {
 	if (!label)
@@ -144,6 +113,30 @@ void drawTileNote(obs_source_t *label, const Rect &r, float pad, float maxHeight
 	drawLabelAt(label, r.x + pad * 1.6f, r.y + pad, s, theme::kLabelPlate, pad * 0.6f);
 }
 
+// Label band under the picture: tinted when the scene is on Program / in
+// Preview, a small LiveVoice-style accent tab on the left, name centred.
+void drawLabelBand(obs_source_t *label, const Rect &band, uint32_t fill, uint32_t tab, float px)
+{
+	if (band.h <= 0.0f)
+		return;
+	drawBox(band.x, band.y, band.w, band.h, fill);
+	const float tabH = std::min(band.h * 0.5f, 12.0f);
+	if (tab)
+		drawBox(band.x + 6.0f, band.y + (band.h - tabH) / 2.0f, 3.0f, tabH, tab);
+	if (!label)
+		return;
+	const float lw = static_cast<float>(obs_source_get_width(label));
+	const float lh = static_cast<float>(obs_source_get_height(label));
+	if (lw <= 0.0f || lh <= 0.0f)
+		return;
+	const float maxW = band.w - 30.0f;
+	if (maxW <= 4.0f)
+		return;
+	const float s = std::min({band.h * 0.6f / lh, maxW / lw, 1.0f});
+	const float x = band.x + (band.w - lw * s) / 2.0f;
+	const float y = band.y + (band.h - lh * s) / 2.0f + 0.5f * px;
+	drawLabelAt(label, x, y, s, 0, 0);
+}
 
 uint32_t levelColor(float db)
 {
@@ -212,104 +205,69 @@ void drawTileMeter(const levels::TileLevels &t, const Rect &pic, float px, float
 	}
 }
 
-Frame computeFrame(const NRect &b, float fw, float fh, float cx, float cy)
-{
-	Frame f;
-	f.fw = fw;
-	f.fh = fh;
-	const float areaW = fw * b.w, areaH = fh * b.h;
-	if (cx / cy > areaW / areaH) {
-		f.scale = cy / areaH;
-		f.ox = (cx - areaW * f.scale) / 2;
-	} else {
-		f.scale = cx / areaW;
-		f.oy = (cy - areaH * f.scale) / 2;
-	}
-	return f;
-}
-
 } // namespace
 
-TileHit Renderer::hitTest(const Layout &layout, uint32_t baseWidth, uint32_t baseHeight, double w, double h, double x,
-			  double y)
-{
-	TileHit hit;
-	if (w <= 0 || h <= 0 || baseWidth == 0 || baseHeight == 0)
-		return hit;
-	const Frame f = computeFrame(layout.bounds(), static_cast<float>(baseWidth), static_cast<float>(baseHeight),
-				     static_cast<float>(w), static_cast<float>(h));
-	const float cxp = (static_cast<float>(x) - f.ox) / f.scale;
-	const float cyp = (static_cast<float>(y) - f.oy) / f.scale;
-	for (size_t i = 0; i < layout.tiles.size(); ++i) {
-		const Tile &t = layout.tiles[i];
-		const float tx = t.rect.x * f.fw, ty = t.rect.y * f.fh, tw = t.rect.w * f.fw, th = t.rect.h * f.fh;
-		if (cxp >= tx && cxp < tx + tw && cyp >= ty && cyp < ty + th) {
-			hit.tile = static_cast<int>(i);
-			hit.kind = t.kind;
-			hit.sceneIndex = t.sceneIndex;
-			break;
-		}
-	}
-	return hit;
-}
-
-void Renderer::render(const Layout &requested, uint32_t cx, uint32_t cy)
+void Renderer::render(const std::string &layoutId, uint32_t cx, uint32_t cy, float dpr)
 {
 	if (cx == 0 || cy == 0)
 		return;
+	dpr = std::max(0.5f, dpr);
 
 	ViewerState::Snapshot snap = ViewerState::get().acquire();
-	const Layout layout = resolveLayout(requested, static_cast<int>(snap.scenes.size()));
+
+	// Everything below is laid out in logical (Qt) pixels; the viewport maps
+	// them to the display's device pixels.
+	const float W = static_cast<float>(cx) / dpr;
+	const float H = static_cast<float>(cy) / dpr;
+	const float aspect = static_cast<float>(snap.baseWidth) / static_cast<float>(std::max<uint32_t>(1, snap.baseHeight));
+
+	PlaceParams params;
+	params.width = W;
+	params.height = H;
+	params.aspect = aspect;
+	params.labelHeight = snap.showLabels ? labelBandHeight(H) : 0.0f;
+	params.gap = 4.0f;
+	params.sceneCount = static_cast<int>(snap.scenes.size());
+	const std::vector<PlacedTile> tiles = placeTiles(layoutId, params);
 
 	Frame f;
 	f.fw = static_cast<float>(snap.baseWidth);
 	f.fh = static_cast<float>(snap.baseHeight);
-	const float aspect = f.fw / f.fh;
+	f.scale = dpr; // logical → device pixels
 
-	// Fit the area the tiles cover (not the whole canvas) into the window.
-	const NRect b = layout.bounds();
-	const float areaW = f.fw * b.w, areaH = f.fh * b.h;
-	f = computeFrame(b, f.fw, f.fh, static_cast<float>(cx), static_cast<float>(cy));
+	const float px = 1.0f / dpr;   // one device pixel
+	const float tally = 2.0f;      // scene on Program / in Preview
+	const float pad = 4.0f;
 
-	// Line weights in window pixels, converted to canvas units.
-	const float px = 1.0f / f.scale;
-	const float hair = 1.0f * px;  // idle border
-	const float tally = 2.0f * px; // program / preview border
-	const float gutter = 3.0f * px;
-	const float pad = std::max(4.0f * px, f.fh * 0.008f);
-
-	startRegion(static_cast<int>(std::lround(f.ox)), static_cast<int>(std::lround(f.oy)),
-		    static_cast<int>(std::lround(areaW * f.scale)), static_cast<int>(std::lround(areaH * f.scale)), 0.0f,
-		    areaW, 0.0f, areaH);
-
-	drawBox(0, 0, areaW, areaH, theme::kBg);
+	startRegion(0, 0, static_cast<int>(cx), static_cast<int>(cy), 0.0f, W, 0.0f, H);
+	drawBox(0, 0, W, H, theme::kBg);
 	const uint64_t now = os_gettime_ns();
 
-	for (const Tile &tile : layout.tiles) {
-		if (tile.kind == TileKind::Status)
-			continue; // status now lives in the side bar
-
-		const Rect cell{tile.rect.x * f.fw, tile.rect.y * f.fh, tile.rect.w * f.fw, tile.rect.h * f.fh};
-		const Rect r = inset(cell, gutter / 2);
+	for (const PlacedTile &tile : tiles) {
+		const Rect pic{tile.picture.x, tile.picture.y, tile.picture.w, tile.picture.h};
+		const Rect band{tile.label.x, tile.label.y, tile.label.w, tile.label.h};
 
 		obs_source_t *source = nullptr;
 		obs_source_t *label = nullptr;
 		uint32_t edge = theme::kBorder;
+		uint32_t bandFill = theme::kPanel;
+		uint32_t tab = 0;
 		bool active = false;
 		bool isProgram = false;
 		bool previewFallback = false;
 
 		switch (tile.kind) {
 		case TileKind::Program:
-			// No coloured box: the label already says PROGRAM.
 			source = snap.program;
 			label = snap.programLabel;
 			isProgram = true;
+			tab = theme::kBad;
 			break;
 		case TileKind::Preview:
 			source = snap.preview;
 			label = snap.previewLabel;
 			previewFallback = !snap.studioMode;
+			tab = snap.studioMode ? theme::kGood : theme::kTextFaint;
 			break;
 		case TileKind::Scene:
 			if (tile.sceneIndex >= 0 && static_cast<size_t>(tile.sceneIndex) < snap.scenes.size()) {
@@ -317,28 +275,27 @@ void Renderer::render(const Layout &requested, uint32_t cx, uint32_t cy)
 				label = snap.sceneLabels[tile.sceneIndex];
 				if (source && source == snap.program) {
 					edge = theme::kBad;
+					bandFill = theme::kTallyProgram;
 					active = true;
 				} else if (source && snap.studioMode && source == snap.preview) {
 					edge = theme::kGood;
+					bandFill = theme::kTallyPreview;
 					active = true;
 				}
 			}
 			break;
-		case TileKind::Status:
-			break;
 		}
 
-		const float t = active ? tally : hair;
-		const Rect inner = inset(r, t);
-		drawBox(inner.x, inner.y, inner.w, inner.h, (source || isProgram) ? theme::kBlack : theme::kPanel);
-		const Rect picture = fitAspect(inner, aspect);
-
+		drawBox(pic.x, pic.y, pic.w, pic.h, (source || isProgram) ? theme::kBlack : theme::kPanel);
 		if (isProgram)
-			renderScaled(f, picture, [] { obs_render_main_texture(); });
+			renderScaled(f, pic, [] { obs_render_main_texture(); });
 		else if (source)
-			renderScaled(f, picture, [source] { obs_source_video_render(source); });
+			renderScaled(f, pic, [source] { obs_source_video_render(source); });
 
-		drawFrame(r, t, edge);
+		if (active)
+			drawFrame(Rect{pic.x, pic.y, pic.w, pic.h + band.h}, tally, edge);
+		else
+			drawFrame(Rect{pic.x, pic.y, pic.w, pic.h + band.h}, px, theme::kBorder);
 
 		if (snap.showTileMeters) {
 			levels::TileLevels tl;
@@ -355,15 +312,13 @@ void Renderer::render(const Layout &requested, uint32_t cx, uint32_t cy)
 				   static_cast<size_t>(tile.sceneIndex) < snap.sceneAudio.size()) {
 				tl = readTile(snap.sceneAudio[tile.sceneIndex], now);
 			}
-			drawTileMeter(tl, inner, px, pad, snap.mutedLabel, std::max(10.0f * px, inner.h * 0.11f));
+			drawTileMeter(tl, pic, px, pad, snap.mutedLabel, std::max(10.0f, pic.h * 0.1f));
 		}
 
 		if (snap.showLabels) {
-			// Label height tracks the tile so small tiles get small labels.
-			const float maxLabel = std::max(10.0f * px, inner.h * 0.11f);
-			drawTileLabel(label, inner, pad, maxLabel);
+			drawLabelBand(label, band, bandFill, active ? 0 : tab, px);
 			if (previewFallback)
-				drawTileNote(snap.studioOffLabel, inner, pad, maxLabel * 0.8f);
+				drawTileNote(snap.studioOffLabel, pic, pad, std::max(10.0f, pic.h * 0.08f));
 		}
 	}
 

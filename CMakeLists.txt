@@ -147,18 +147,14 @@ target_sources(
     src/ui/Theme.hpp
     src/ui/ViewerDisplay.cpp
     src/ui/ViewerDisplay.hpp
-    src/ui/ViewerToolbar.cpp
-    src/ui/ViewerToolbar.hpp
     src/ui/ViewerDock.cpp
     src/ui/ViewerDock.hpp
-    src/ui/FullscreenWindow.cpp
-    src/ui/FullscreenWindow.hpp
+    src/ui/ViewerWindow.cpp
+    src/ui/ViewerWindow.hpp
     src/ui/SettingsDialog.cpp
     src/ui/SettingsDialog.hpp
     src/ui/MultiviewPanel.cpp
     src/ui/MultiviewPanel.hpp
-    src/ui/NetworkBar.cpp
-    src/ui/NetworkBar.hpp
     src/ui/Paint.hpp
     src/ui/SidePanel.cpp
     src/ui/SidePanel.hpp

@@ -543,7 +543,7 @@ Levels Engine::slotLevels(int index) const
 void Engine::setMasterGains(float inDb, float outDb)
 {
 	impl_->masterInDb = std::clamp(inDb, -24.0f, 24.0f);
-	impl_->masterOutDb = std::clamp(outDb, -24.0f, 24.0f);
+	impl_->masterOutDb = std::clamp(outDb, -60.0f, 24.0f); // the output fader goes down to −60
 	impl_->masterIn = fromDb(impl_->masterInDb);
 	impl_->masterOut = fromDb(impl_->masterOutDb);
 }

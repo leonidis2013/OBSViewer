@@ -47,14 +47,13 @@ void Settings::load()
 	dockLayout = getString(data, "dock_layout", defaults.dockLayout);
 	windowLayout = getString(data, "window_layout", defaults.windowLayout);
 	windowScreen = getString(data, "window_screen", defaults.windowScreen);
+	windowGeometry = getString(data, "window_geometry", defaults.windowGeometry);
 	showLabels = getBool(data, "show_labels", defaults.showLabels);
 	clickAction = obs_data_has_user_value(data, "click_action") ? static_cast<int>(obs_data_get_int(data, "click_action"))
 								     : defaults.clickAction;
 	if (clickAction < 0 || clickAction > 2)
 		clickAction = defaults.clickAction;
-	fullscreenToolbar = getBool(data, "fullscreen_toolbar", defaults.fullscreenToolbar);
 	showSidebar = getBool(data, "show_sidebar", defaults.showSidebar);
-	showNetbar = getBool(data, "show_netbar", defaults.showNetbar);
 	alarms = getBool(data, "alarms", defaults.alarms);
 	tileMeters = getBool(data, "tile_meters", defaults.tileMeters);
 	loudnessPreset = obs_data_has_user_value(data, "loudness_preset")
@@ -76,6 +75,13 @@ void Settings::load()
 	if (updateRepo.empty())
 		updateRepo = defaults.updateRepo;
 
+	// 0.6.0 introduced the dynamic layout (Preview + Program on top, every scene
+	// below) and made it the default; move older configs onto it once.
+	if (obs_data_get_int(data, "settings_version") < 2) {
+		dockLayout = defaults.dockLayout;
+		windowLayout = defaults.windowLayout;
+	}
+
 	obs_data_release(data);
 }
 
@@ -92,14 +98,14 @@ void Settings::save() const
 		return;
 
 	obs_data_t *data = obs_data_create();
+	obs_data_set_int(data, "settings_version", 2);
 	obs_data_set_string(data, "dock_layout", dockLayout.c_str());
 	obs_data_set_string(data, "window_layout", windowLayout.c_str());
 	obs_data_set_string(data, "window_screen", windowScreen.c_str());
+	obs_data_set_string(data, "window_geometry", windowGeometry.c_str());
 	obs_data_set_bool(data, "show_labels", showLabels);
 	obs_data_set_int(data, "click_action", clickAction);
-	obs_data_set_bool(data, "fullscreen_toolbar", fullscreenToolbar);
 	obs_data_set_bool(data, "show_sidebar", showSidebar);
-	obs_data_set_bool(data, "show_netbar", showNetbar);
 	obs_data_set_bool(data, "alarms", alarms);
 	obs_data_set_bool(data, "tile_meters", tileMeters);
 	obs_data_set_int(data, "loudness_preset", loudnessPreset);

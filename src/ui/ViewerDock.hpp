@@ -8,9 +8,8 @@ namespace obsviewer {
 
 class MultiviewPanel;
 class ViewerDisplay;
-class ViewerToolbar;
 
-// Contents of the "OBSViewer" dock: a slim toolbar above the multiview panel.
+// Contents of the "OBSViewer" dock: the multiview panel in its compact size.
 class ViewerDock : public QWidget {
 	Q_OBJECT
 
@@ -24,7 +23,6 @@ private:
 	void pickLayout(const std::string &id);
 	void showContextMenu(const QPoint &globalPos);
 
-	ViewerToolbar *toolbar_ = nullptr;
 	MultiviewPanel *panel_ = nullptr;
 	ViewerDisplay *display_ = nullptr;
 };

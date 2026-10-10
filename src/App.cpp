@@ -4,10 +4,10 @@
 #include "core/Settings.hpp"
 #include "ui/MasterBusWindow.hpp"
 #include "metrics/Metrics.hpp"
-#include "ui/FullscreenWindow.hpp"
 #include "ui/Menu.hpp"
 #include "ui/SettingsDialog.hpp"
 #include "ui/ViewerDock.hpp"
+#include "ui/ViewerWindow.hpp"
 #include "update/Updater.hpp"
 #include "viewer/Layouts.hpp"
 #include "viewer/ViewerState.hpp"
@@ -75,7 +75,7 @@ void App::shutdown()
 		pollTimer_->stop();
 	if (updater_)
 		updater_->cancel();
-	closeFullscreen();
+	closeViewer();
 	if (settings_)
 		settings_->close();
 	ViewerState::get().clear();
@@ -139,7 +139,7 @@ void App::handleFrontendEvent(enum obs_frontend_event event)
 			pollTimer_->stop();
 		if (updater_)
 			updater_->cancel();
-		closeFullscreen();
+		closeViewer();
 		ViewerState::get().clear();
 		break;
 
@@ -161,15 +161,14 @@ void App::buildToolsMenu()
 	toolsMenu_ = new QMenu(static_cast<QWidget *>(obs_frontend_get_main_window()));
 	action->setMenu(toolsMenu_);
 
-	auto *screens = new ui::ScreenMenu(tr("Open Fullscreen"), [this](QScreen *screen) { openFullscreen(screen); },
-					   toolsMenu_);
-	toolsMenu_->addMenu(screens);
-
 	// Every action runs after the menu has closed (see ScreenMenu for why).
 	auto later = [this](auto fn) { return [this, fn] { QTimer::singleShot(0, this, fn); }; };
 
-	connect(toolsMenu_->addAction(tr("Close Fullscreen")), &QAction::triggered, this,
-		later([this] { closeFullscreen(); }));
+	connect(toolsMenu_->addAction(tr("Open Window")), &QAction::triggered, this, later([this] { openWindowed(); }));
+	auto *screens = new ui::ScreenMenu(tr("Open Fullscreen"), [this](QScreen *screen) { openFullscreen(screen); },
+					   toolsMenu_);
+	toolsMenu_->addMenu(screens);
+	connect(toolsMenu_->addAction(tr("Close Window")), &QAction::triggered, this, later([this] { closeViewer(); }));
 	toolsMenu_->addSeparator();
 	connect(toolsMenu_->addAction(tr("Master Bus…")), &QAction::triggered, this,
 		later([this] { openMasterBus(); }));
@@ -178,13 +177,33 @@ void App::buildToolsMenu()
 		later([this] { checkForUpdates(true); }));
 }
 
-bool App::fullscreenOpen() const
+bool App::viewerOpen() const
 {
-	return !fullscreen_.isNull();
+	return !viewer_.isNull();
+}
+
+ViewerWindow *App::ensureViewer()
+{
+	if (!viewer_) {
+		viewer_ = new ViewerWindow();
+		viewer_->setAttribute(Qt::WA_DeleteOnClose);
+	}
+	return viewer_;
+}
+
+void App::openWindowed()
+{
+	ensureViewer()->showWindowed();
 }
 
 void App::openFullscreen(QScreen *screen)
 {
+	if (!screen) {
+		const QString saved = QString::fromStdString(Settings::get().windowScreen);
+		for (QScreen *s : QGuiApplication::screens())
+			if (s->name() == saved)
+				screen = s;
+	}
 	if (!screen)
 		screen = QGuiApplication::primaryScreen();
 	if (!screen) {
@@ -199,23 +218,19 @@ void App::openFullscreen(QScreen *screen)
 	s.windowScreen = screen->name().toStdString();
 	s.save();
 
-	// Recreate rather than move: macOS fullscreen Spaces don't move cleanly between screens.
-	if (fullscreen_) {
-		fullscreen_->close();
-		fullscreen_ = nullptr;
+	// Already fullscreen on another screen: recreate rather than move, because
+	// macOS fullscreen Spaces don't move cleanly between screens.
+	if (viewer_ && viewer_->fullscreen() && viewer_->screen() != screen) {
+		viewer_->close();
+		viewer_ = nullptr;
 	}
-	fullscreen_ = new FullscreenWindow();
-	fullscreen_->setAttribute(Qt::WA_DeleteOnClose);
-	fullscreen_->setLayoutId(s.windowLayout);
-	fullscreen_->showOnScreen(screen);
+	ensureViewer()->showFullscreenOn(screen);
 
 	// Report what macOS actually did, so a log shows whether fullscreen took effect.
-	QPointer<FullscreenWindow> window = fullscreen_;
+	QPointer<ViewerWindow> window = viewer_;
 	QTimer::singleShot(2000, this, [window] {
-		if (!window) {
-			obs_log(LOG_INFO, "fullscreen: window was closed");
+		if (!window)
 			return;
-		}
 		const QRect wg = window->geometry();
 		obs_log(LOG_INFO, "fullscreen: visible=%d fullscreen=%d geometry=%d,%d %dx%d screen='%s'",
 			window->isVisible(), window->isFullScreen(), wg.x(), wg.y(), wg.width(), wg.height(),
@@ -223,12 +238,18 @@ void App::openFullscreen(QScreen *screen)
 	});
 }
 
-void App::closeFullscreen()
+void App::toggleViewerMode()
 {
-	if (fullscreen_) {
-		obs_log(LOG_INFO, "fullscreen: closing");
-		fullscreen_->close();
-	}
+	if (viewer_ && viewer_->fullscreen())
+		openWindowed();
+	else
+		openFullscreen(viewer_ ? viewer_->screen() : nullptr);
+}
+
+void App::closeViewer()
+{
+	if (viewer_)
+		viewer_->close();
 }
 
 void App::openSettings(QWidget *parent)
@@ -323,10 +344,8 @@ void App::applySettings()
 		dock_->setLayoutId(s.dockLayout);
 		dock_->applySettings();
 	}
-	if (fullscreen_) {
-		fullscreen_->setLayoutId(s.windowLayout);
-		fullscreen_->applySettings();
-	}
+	if (viewer_)
+		viewer_->applySettings();
 }
 
 } // namespace obsviewer

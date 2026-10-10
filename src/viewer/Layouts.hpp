@@ -3,46 +3,59 @@
 #include <string>
 #include <vector>
 
+// Multiview layouts. Tiles are placed in window pixels for the actual window
+// shape, so the views always use the space they have, with each view's label in
+// a band just below its picture.
 namespace obsviewer {
 
-// Rectangle in normalised canvas units: (0,0) is top-left, (1,1) bottom-right.
-// On the (usually 16:9) canvas, a rect with w == h has the canvas aspect ratio.
-struct NRect {
+enum class TileKind { Program, Preview, Scene };
+
+struct Box {
 	float x = 0, y = 0, w = 0, h = 0;
+	bool contains(float px, float py) const { return px >= x && px < x + w && py >= y && py < y + h; }
 };
 
-enum class TileKind { Program, Preview, Scene, Status };
-
-struct Tile {
+struct PlacedTile {
 	TileKind kind = TileKind::Scene;
-	int sceneIndex = -1; // for TileKind::Scene: index into the OBS scene list
-	NRect rect;
+	int sceneIndex = -1; // for scenes: index into the OBS scene list
+	Box cell;            // picture + label band (what a click hits)
+	Box picture;         // the video, at the canvas aspect ratio
+	Box label;           // band below the picture (height 0 when labels are off)
 };
 
-struct Layout {
+struct LayoutInfo {
 	std::string id;
 	std::string name;
-	std::vector<Tile> tiles;
-
-	int sceneTileCount() const;
-	// Area the tiles actually cover (from 0,0), so short layouts don't waste space.
-	NRect bounds() const;
+	std::string description;
+	int fixedScenes = -1; // scene tiles the preset has; -1 = every scene
 };
 
-const std::vector<Layout> &allLayouts();
+struct PlaceParams {
+	float width = 0;        // view size (any unit, usually logical pixels)
+	float height = 0;
+	float aspect = 16.0f / 9.0f; // canvas width / height
+	float labelHeight = 0;  // band under each picture; 0 = no labels
+	float gap = 4;          // space between tiles
+	int sceneCount = 0;     // scenes in the current collection
+};
 
-// Returns the layout with this id, or the default (ATEM) layout.
-const Layout &layoutById(const std::string &id);
+const std::vector<LayoutInfo> &allLayouts();
 
-// "Auto": Preview + Program large on top, then every scene below, sized so all
-// of them fit (4 to 12 per row, last row centred).
-Layout makeAutoLayout(int sceneCount);
+// The layout with this id, or the default ("auto") layout.
+const LayoutInfo &layoutById(const std::string &id);
 
-// The layout as drawn: resolves "auto" for the current number of scenes.
-Layout resolveLayout(const Layout &layout, int sceneCount);
+// Where every tile goes for a view of the given size. Scene tiles past the end of
+// the scene list are still placed (they show as empty), except in "auto", which
+// shows exactly the scenes there are.
+std::vector<PlacedTile> placeTiles(const std::string &layoutId, const PlaceParams &params);
+
+// Index of the tile under (x, y), or -1.
+int tileAt(const std::vector<PlacedTile> &tiles, float x, float y);
+
+// Label band height for a view this tall (same units as PlaceParams).
+float labelBandHeight(float viewHeight);
 
 constexpr const char *kAutoLayoutId = "auto";
-
-constexpr const char *kDefaultLayoutId = "atem";
+constexpr const char *kDefaultLayoutId = "auto";
 
 } // namespace obsviewer
