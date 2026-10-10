@@ -14,8 +14,11 @@
 #include <CommonCrypto/CommonDigest.h>
 #endif
 
+#include <QCoreApplication>
 #include <QDir>
+#include <QProcess>
 #include <QFile>
+#include <QFileInfo>
 #include <QMessageBox>
 #include <QStandardPaths>
 #include <QWidget>
@@ -466,6 +469,92 @@ void Updater::runDownload(Release release, std::string repo, std::string token)
 	}
 
 	QMetaObject::invokeMethod(this, [this, finalPath] { emit downloadFinished(finalPath); }, Qt::QueuedConnection);
+}
+
+// ---------------------------------------------------------------- restart and install
+
+namespace {
+
+// Runs detached from OBS. Arguments: OBS pid, package, OBS.app path, log file.
+constexpr const char *kRestartScript = R"SH(#!/bin/bash
+PID="$1"; PKG="$2"; APP="$3"; LOG="$4"
+mkdir -p "$(dirname "$LOG")"
+exec >>"$LOG" 2>&1
+echo "---- $(date): OBSViewer update, waiting for OBS (pid $PID) to quit"
+for i in $(seq 1 1800); do
+	kill -0 "$PID" 2>/dev/null || break
+	sleep 0.5
+done
+if kill -0 "$PID" 2>/dev/null; then
+	echo "OBS is still running after 15 minutes; update not installed."
+	exit 1
+fi
+sleep 1
+/usr/bin/xattr -d com.apple.quarantine "$PKG" 2>/dev/null
+if /usr/sbin/installer -pkg "$PKG" -target CurrentUserHomeDirectory; then
+	echo "Installed $PKG"
+else
+	echo "Command-line install failed; opening Installer instead"
+	/usr/bin/open -W "$PKG"
+fi
+if [ -d "$APP" ]; then
+	/usr/bin/open "$APP"
+else
+	/usr/bin/open -b com.obsproject.obs-studio
+fi
+echo "OBS reopened"
+)SH";
+
+// /Applications/OBS.app/Contents/MacOS → /Applications/OBS.app
+QString obsAppBundle()
+{
+	QDir dir(QCoreApplication::applicationDirPath());
+	if (dir.cdUp() && dir.cdUp() && dir.absolutePath().endsWith(QStringLiteral(".app")))
+		return dir.absolutePath();
+	return QString();
+}
+
+} // namespace
+
+QString Updater::installLogPath()
+{
+	return QDir::homePath() + QStringLiteral("/Library/Logs/OBSViewer/update.log");
+}
+
+qint64 Updater::scheduleInstallOnRestart(const QString &pkgPath, QString &error)
+{
+	if (!QFileInfo::exists(pkgPath)) {
+		error = tr("The downloaded installer is missing. Download it again.");
+		return 0;
+	}
+	const QString scriptPath = QDir(QDir::tempPath()).filePath(QStringLiteral("obsviewer-update.sh"));
+	QFile script(scriptPath);
+	if (!script.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
+		error = tr("Couldn't prepare the update (can't write to %1).").arg(QDir::tempPath());
+		return 0;
+	}
+	script.write(kRestartScript);
+	script.close();
+	script.setPermissions(QFileDevice::ReadOwner | QFileDevice::WriteOwner | QFileDevice::ExeOwner);
+
+	const QStringList args = {scriptPath, QString::number(QCoreApplication::applicationPid()), pkgPath,
+				  obsAppBundle(), installLogPath()};
+	qint64 pid = 0;
+	if (!QProcess::startDetached(QStringLiteral("/bin/bash"), args, QDir::homePath(), &pid) || pid <= 0) {
+		error = tr("Couldn't start the update helper.");
+		return 0;
+	}
+	obs_log(LOG_INFO, "update: will install %s after OBS quits (helper pid %lld, log %s)",
+		pkgPath.toUtf8().constData(), static_cast<long long>(pid), installLogPath().toUtf8().constData());
+	return pid;
+}
+
+void Updater::cancelScheduledInstall(qint64 pid)
+{
+	if (pid <= 0)
+		return;
+	QProcess::execute(QStringLiteral("/bin/kill"), {QString::number(pid)});
+	obs_log(LOG_INFO, "update: scheduled install cancelled");
 }
 
 } // namespace obsviewer

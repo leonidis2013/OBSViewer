@@ -301,8 +301,16 @@ in normal case; buttons radius 5 on panelHi.
 4. Download & Install fetches the asset to `~/Downloads`, shows progress, and checks
    its SHA-256 against GitHub's asset digest (or `SHA256SUMS.txt`). A mismatch
    deletes the file and stops.
-5. The verified `.pkg` opens in macOS Installer. The dialog tells the user to quit OBS
-   before finishing, then reopen it to load the new version.
+5. When verified, the dialog offers **Restart OBS** (0.6.1). It writes a small script
+   to the temp folder and starts it detached with OBS's pid, the package and the
+   OBS.app path, then closes OBS's main window (OBS asks first if you're live). The
+   script waits for OBS to exit (gives up after 15 min), runs
+   `installer -pkg … -target CurrentUserHomeDirectory` (the package only installs into
+   the user's home, so no admin password), falls back to opening macOS Installer if
+   that fails, and opens OBS again. It logs to `~/Library/Logs/OBSViewer/update.log`.
+   If OBS is still open 4 s after the close request (quit cancelled), the dialog says
+   so and offers **Restart OBS** again or **Cancel Update** (kills the script).
+   **Install Manually…** opens the package in macOS Installer as before.
 
 **Private repository:** GitHub's API hides private releases from anonymous requests.
 While `leonidis2013/OBSViewer` is private, the updater needs a fine-grained personal

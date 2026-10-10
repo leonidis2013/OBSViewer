@@ -64,8 +64,10 @@ the bus input track for anything else. Plugin latency is compensated automatical
 OBSViewer checks for a new version when OBS starts (at most every 12 hours), or
 whenever you choose **Tools ▸ OBSViewer ▸ Check for Updates**. If one is available
 you'll see its release notes and can **Download & Install**: the installer is saved to
-your Downloads folder, its SHA-256 checksum is verified, and it opens in macOS
-Installer. Quit OBS before clicking Install, then reopen OBS.
+your Downloads folder and its SHA-256 checksum is verified. Then click **Restart OBS**:
+OBS closes, the update installs, and OBS opens again on its own (OBS asks first if
+you're streaming or recording). **Install Manually…** opens the installer instead if
+you prefer. What the restart did is logged in `~/Library/Logs/OBSViewer/update.log`.
 
 **While this repository is private**, GitHub only shows its releases to signed-in
 requests, so the updater needs a token:

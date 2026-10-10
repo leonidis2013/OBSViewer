@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.6.1] — 2026-10-10
+
+- **Updates now restart OBS for you.** After an update downloads and is verified, click **Restart OBS**: OBS closes, the update installs (no password needed), and OBS opens again with the new version. This replaces "Quit OBS". If you're streaming or recording, OBS still asks before closing; if you cancel, the dialog lets you try again or cancel the update. **Install Manually…** opens the installer the old way.
+- Takes effect from the next update after 0.6.1 (the dialog that runs is the one from the version you have installed).
+
+
 ## [0.6.0] — 2026-10-10
 
 Cleaner multiview, a proper window mode, and a channel-strip master bus.

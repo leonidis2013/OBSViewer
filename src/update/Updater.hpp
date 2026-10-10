@@ -17,7 +17,7 @@ namespace obsviewer {
 class UpdateDialog;
 
 // Checks GitHub Releases for a newer OBSViewer, downloads and verifies the .pkg,
-// and opens it in macOS Installer. Network work runs on a worker thread; results
+// and installs it when OBS restarts (see scheduleInstallOnRestart). Network work runs on a worker thread; results
 // come back to the Qt main thread.
 class Updater : public QObject {
 	Q_OBJECT
@@ -36,6 +36,17 @@ public:
 	void download(const Release &release);
 	// Stop any network work and wait for the worker to finish.
 	void cancel();
+
+	// "Restart OBS": starts a small background script that waits for OBS to quit,
+	// installs the downloaded package into the user's OBS plugins folder (no admin
+	// password; falls back to macOS Installer if that fails) and opens OBS again.
+	// Returns the script's process id (0 on failure, with `error` set). The script
+	// gives up if OBS is still running after 15 minutes.
+	static qint64 scheduleInstallOnRestart(const QString &pkgPath, QString &error);
+	// Stops a scheduled install (e.g. the user cancelled quitting OBS).
+	static void cancelScheduledInstall(qint64 pid);
+	// Where the restart script writes what it did.
+	static QString installLogPath();
 
 	bool busy() const { return busy_.load(); }
 

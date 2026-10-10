@@ -10,9 +10,9 @@
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QMainWindow>
+#include <QPointer>
 #include <QProgressBar>
 #include <QPushButton>
-#include <QStyle>
 #include <QTextBrowser>
 #include <QTimer>
 #include <QUrl>
@@ -80,8 +80,15 @@ UpdateDialog::UpdateDialog(const Release &release, Updater *updater, QWidget *pa
 	installButton_->setDefault(true);
 	skipButton_ = new QPushButton(tr("Skip This Version"), this);
 	laterButton_ = new QPushButton(tr("Later"), this);
-	quitButton_ = new QPushButton(tr("Quit OBS"), this);
-	quitButton_->hide();
+	restartButton_ = new QPushButton(tr("Restart OBS"), this);
+	restartButton_->setProperty("accent", true);
+	restartButton_->setToolTip(tr("OBS closes, the update installs, and OBS opens again"));
+	restartButton_->hide();
+	manualButton_ = new QPushButton(tr("Install Manually…"), this);
+	manualButton_->setToolTip(tr("Open the installer yourself instead"));
+	manualButton_->hide();
+	cancelUpdateButton_ = new QPushButton(tr("Cancel Update"), this);
+	cancelUpdateButton_->hide();
 	auto *githubButton = new QPushButton(tr("View on GitHub"), this);
 	githubButton->setEnabled(!release.htmlUrl.empty());
 
@@ -89,8 +96,10 @@ UpdateDialog::UpdateDialog(const Release &release, Updater *updater, QWidget *pa
 	buttons->addWidget(githubButton);
 	buttons->addStretch(1);
 	buttons->addWidget(skipButton_);
+	buttons->addWidget(manualButton_);
+	buttons->addWidget(cancelUpdateButton_);
 	buttons->addWidget(laterButton_);
-	buttons->addWidget(quitButton_);
+	buttons->addWidget(restartButton_);
 	buttons->addWidget(installButton_);
 
 	auto *layout = new QVBoxLayout(this);
@@ -113,10 +122,21 @@ UpdateDialog::UpdateDialog(const Release &release, Updater *updater, QWidget *pa
 	});
 	connect(githubButton, &QPushButton::clicked, this,
 		[this] { QDesktopServices::openUrl(QUrl(QString::fromStdString(release_.htmlUrl))); });
-	connect(quitButton_, &QPushButton::clicked, this, [] {
-		// Closing OBS's main window quits OBS (it asks first if you're live).
-		if (auto *main = static_cast<QMainWindow *>(obs_frontend_get_main_window()))
-			QTimer::singleShot(0, main, [main] { main->close(); });
+	connect(restartButton_, &QPushButton::clicked, this, &UpdateDialog::restartObs);
+	connect(manualButton_, &QPushButton::clicked, this, [this] {
+		if (helperPid_) {
+			Updater::cancelScheduledInstall(helperPid_);
+			helperPid_ = 0;
+		}
+		QDesktopServices::openUrl(QUrl::fromLocalFile(packagePath_));
+		status_->setText(tr("The installer is open. Quit OBS before you click Install, then reopen OBS."));
+	});
+	connect(cancelUpdateButton_, &QPushButton::clicked, this, [this] {
+		Updater::cancelScheduledInstall(helperPid_);
+		helperPid_ = 0;
+		cancelUpdateButton_->hide();
+		restartButton_->show();
+		status_->setText(tr("Update cancelled. Click Restart OBS whenever you're ready."));
 	});
 
 	connect(updater_, &Updater::downloadProgress, this, &UpdateDialog::onProgress);
@@ -146,20 +166,54 @@ void UpdateDialog::onProgress(qint64 received, qint64 total)
 
 void UpdateDialog::onFinished(const QString &path)
 {
+	packagePath_ = path;
 	progress_->setRange(0, 1000);
 	progress_->setValue(1000);
-	status_->setText(tr("Verified and saved to %1.\n\nThe installer is opening. Quit OBS before you click "
-			    "Install, then reopen OBS to load OBSViewer %2.")
-				 .arg(path, QString::fromStdString(release_.version.toString())));
+	progress_->hide();
+	status_->setText(tr("OBSViewer %1 is downloaded and verified.\n\nClick Restart OBS: OBS closes, the update "
+			    "installs, and OBS opens again with the new version.")
+				 .arg(QString::fromStdString(release_.version.toString())));
 	installButton_->hide();
 	skipButton_->hide();
-	laterButton_->setText(tr("Close"));
-	quitButton_->show();
-	quitButton_->setProperty("accent", true);
-	quitButton_->style()->unpolish(quitButton_);
-	quitButton_->style()->polish(quitButton_);
+	laterButton_->setText(tr("Later"));
+	manualButton_->show();
+	restartButton_->show();
+	restartButton_->setDefault(true);
+	restartButton_->setFocus();
+}
 
-	QDesktopServices::openUrl(QUrl::fromLocalFile(path));
+void UpdateDialog::restartObs()
+{
+	if (!helperPid_) {
+		QString error;
+		helperPid_ = Updater::scheduleInstallOnRestart(packagePath_, error);
+		if (!helperPid_) {
+			status_->setText(error + QStringLiteral("\n\n") + tr("Use Install Manually instead."));
+			return;
+		}
+	}
+	restartButton_->hide();
+	status_->setText(tr("Restarting OBS…"));
+
+	auto *main = static_cast<QMainWindow *>(obs_frontend_get_main_window());
+	if (!main)
+		return;
+	// Closing OBS's main window quits OBS; it asks first if you're streaming or
+	// recording. OBS reopens on its own once the update is installed.
+	QPointer<UpdateDialog> self(this);
+	QTimer::singleShot(0, main, [main, self] {
+		main->close();
+		// Still here a few seconds later with the window up: quitting was cancelled.
+		QTimer::singleShot(4000, main, [main, self] {
+			if (!self || !main->isVisible())
+				return;
+			self->status_->setText(
+				tr("OBS is still open (quitting was cancelled or is waiting). The update installs as soon as "
+				   "OBS quits, and OBS then opens again. Click Restart OBS to try again, or Cancel Update."));
+			self->restartButton_->show();
+			self->cancelUpdateButton_->show();
+		});
+	});
 }
 
 void UpdateDialog::onFailed(const QString &message)
