@@ -13,7 +13,7 @@ emit() { # $1 = text block
 }
 
 # 1) compiler / CMake error lines with a little context (max 6 annotations)
-errors="$(grep -n -E 'error:|CMake Error|FATAL_ERROR|fatal error' "$log" | head -60 | cut -c1-400)"
+errors="$( (grep -n -E 'Undefined symbols|ld: |duplicate symbol' "$log"; grep -n -A3 -E '^ *"_.*", referenced from' "$log"; grep -n -E 'error:|CMake Error|FATAL_ERROR|fatal error' "$log") | head -60 | cut -c1-400)"
 if [[ -n "$errors" ]]; then
   i=0
   while IFS= read -r -d '' chunk && (( i < 6 )); do emit "$chunk"; i=$((i+1)); done \
