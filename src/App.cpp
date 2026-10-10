@@ -14,6 +14,7 @@
 #include <QGuiApplication>
 #include <QMainWindow>
 #include <QMenu>
+#include <QPointer>
 #include <QScreen>
 #include <QTimer>
 
@@ -131,34 +132,29 @@ void App::handleFrontendEvent(enum obs_frontend_event event)
 void App::buildToolsMenu()
 {
 	auto *action = static_cast<QAction *>(obs_frontend_add_tools_menu_qaction("OBSViewer"));
-	if (!action)
+	if (!action) {
+		obs_log(LOG_WARNING, "could not add the Tools menu entry");
 		return;
+	}
 
+	// Built once. On macOS the Tools menu is a native menu, and adding or removing
+	// items while it opens makes clicks get lost, so nothing here is rebuilt on show.
 	toolsMenu_ = new QMenu(static_cast<QWidget *>(obs_frontend_get_main_window()));
 	action->setMenu(toolsMenu_);
-	connect(toolsMenu_, &QMenu::aboutToShow, this, &App::rebuildToolsMenu);
-	rebuildToolsMenu();
-}
 
-void App::rebuildToolsMenu()
-{
-	if (!toolsMenu_)
-		return;
-	toolsMenu_->clear();
+	auto *screens = new ui::ScreenMenu(tr("Open Fullscreen"), [this](QScreen *screen) { openFullscreen(screen); },
+					   toolsMenu_);
+	toolsMenu_->addMenu(screens);
 
-	QMenu *fullscreen = toolsMenu_->addMenu(tr("Open Fullscreen"));
-	ui::addScreenActions(fullscreen, Settings::get().windowScreen, [this](QScreen *screen) {
-		openFullscreen(screen);
-	});
+	// Every action runs after the menu has closed (see ScreenMenu for why).
+	auto later = [this](auto fn) { return [this, fn] { QTimer::singleShot(0, this, fn); }; };
 
-	QAction *close = toolsMenu_->addAction(tr("Close Fullscreen"));
-	close->setEnabled(fullscreenOpen());
-	connect(close, &QAction::triggered, this, &App::closeFullscreen);
-
+	connect(toolsMenu_->addAction(tr("Close Fullscreen")), &QAction::triggered, this,
+		later([this] { closeFullscreen(); }));
 	toolsMenu_->addSeparator();
-	connect(toolsMenu_->addAction(tr("Settings…")), &QAction::triggered, this, &App::openSettings);
+	connect(toolsMenu_->addAction(tr("Settings…")), &QAction::triggered, this, later([this] { openSettings(); }));
 	connect(toolsMenu_->addAction(tr("Check for Updates…")), &QAction::triggered, this,
-		[this] { checkForUpdates(true); });
+		later([this] { checkForUpdates(true); }));
 }
 
 bool App::fullscreenOpen() const
@@ -170,6 +166,13 @@ void App::openFullscreen(QScreen *screen)
 {
 	if (!screen)
 		screen = QGuiApplication::primaryScreen();
+	if (!screen) {
+		obs_log(LOG_WARNING, "fullscreen: no screen available");
+		return;
+	}
+	const QRect g = screen->geometry();
+	obs_log(LOG_INFO, "fullscreen: opening on '%s' (%d,%d %dx%d, scale %.1f)",
+		screen->name().toUtf8().constData(), g.x(), g.y(), g.width(), g.height(), screen->devicePixelRatio());
 
 	Settings &s = Settings::get();
 	s.windowScreen = screen->name().toStdString();
@@ -184,16 +187,32 @@ void App::openFullscreen(QScreen *screen)
 	fullscreen_->setAttribute(Qt::WA_DeleteOnClose);
 	fullscreen_->setLayoutId(s.windowLayout);
 	fullscreen_->showOnScreen(screen);
+
+	// Report what macOS actually did, so a log shows whether fullscreen took effect.
+	QPointer<FullscreenWindow> window = fullscreen_;
+	QTimer::singleShot(2000, this, [window] {
+		if (!window) {
+			obs_log(LOG_INFO, "fullscreen: window was closed");
+			return;
+		}
+		const QRect wg = window->geometry();
+		obs_log(LOG_INFO, "fullscreen: visible=%d fullscreen=%d geometry=%d,%d %dx%d screen='%s'",
+			window->isVisible(), window->isFullScreen(), wg.x(), wg.y(), wg.width(), wg.height(),
+			window->screen() ? window->screen()->name().toUtf8().constData() : "?");
+	});
 }
 
 void App::closeFullscreen()
 {
-	if (fullscreen_)
+	if (fullscreen_) {
+		obs_log(LOG_INFO, "fullscreen: closing");
 		fullscreen_->close();
+	}
 }
 
 void App::openSettings()
 {
+	obs_log(LOG_INFO, "settings: opening");
 	if (!settings_) {
 		settings_ = new SettingsDialog(static_cast<QWidget *>(obs_frontend_get_main_window()));
 		settings_->setAttribute(Qt::WA_DeleteOnClose);
@@ -201,6 +220,7 @@ void App::openSettings()
 	settings_->show();
 	settings_->raise();
 	settings_->activateWindow();
+	obs_log(LOG_INFO, "settings: visible=%d", settings_->isVisible());
 }
 
 void App::checkForUpdates(bool interactive)

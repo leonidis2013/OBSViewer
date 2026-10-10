@@ -2,6 +2,7 @@
 
 #include <QWidget>
 
+#include <functional>
 #include <string>
 
 class QScreen;
@@ -10,7 +11,7 @@ namespace obsviewer {
 
 class ViewerDisplay;
 
-// Borderless fullscreen multiview on a chosen screen. Esc or double-click closes it.
+// Fullscreen multiview on a chosen screen. Esc or double-click closes it.
 class FullscreenWindow : public QWidget {
 	Q_OBJECT
 

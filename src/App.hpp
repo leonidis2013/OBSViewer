@@ -43,7 +43,6 @@ private:
 	static void onFrontendEvent(enum obs_frontend_event event, void *param);
 	void handleFrontendEvent(enum obs_frontend_event event);
 	void buildToolsMenu();
-	void rebuildToolsMenu();
 
 	QPointer<ViewerDock> dock_;
 	QPointer<FullscreenWindow> fullscreen_;

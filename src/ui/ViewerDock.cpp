@@ -10,8 +10,13 @@
 #include <QComboBox>
 #include <QHBoxLayout>
 #include <QMenu>
+#include <QPointer>
+#include <QScreen>
+#include <QTimer>
 #include <QToolButton>
 #include <QVBoxLayout>
+
+#include <functional>
 
 namespace obsviewer {
 
@@ -36,17 +41,11 @@ ViewerDock::ViewerDock(QWidget *parent) : QWidget(parent)
 	fullscreenButton_->setText(tr("Fullscreen"));
 	fullscreenButton_->setToolTip(tr("Open the multiview fullscreen on a screen"));
 	fullscreenButton_->setPopupMode(QToolButton::InstantPopup);
-	auto *screenMenu = new QMenu(fullscreenButton_);
-	connect(screenMenu, &QMenu::aboutToShow, this, [screenMenu] {
-		screenMenu->clear();
-		ui::addScreenActions(screenMenu, Settings::get().windowScreen,
-				     [](QScreen *screen) { App::get().openFullscreen(screen); });
-		if (App::get().fullscreenOpen()) {
-			screenMenu->addSeparator();
-			QObject::connect(screenMenu->addAction(tr("Close Fullscreen")), &QAction::triggered, screenMenu,
-					 [] { App::get().closeFullscreen(); });
-		}
-	});
+	auto *screenMenu = new ui::ScreenMenu(tr("Open Fullscreen"),
+					      [](QScreen *screen) { App::get().openFullscreen(screen); },
+					      fullscreenButton_);
+	screenMenu->setExtraAction(
+		tr("Close Fullscreen"), [] { App::get().closeFullscreen(); }, [] { return App::get().fullscreenOpen(); });
 	fullscreenButton_->setMenu(screenMenu);
 
 	settingsButton_ = new QToolButton(toolbar);
@@ -97,13 +96,29 @@ void ViewerDock::onLayoutPicked(int index)
 
 void ViewerDock::showContextMenu(const QPoint &globalPos)
 {
+	// Actions run after the menu closes: on macOS, opening a fullscreen window or a
+	// dialog while a menu is still tracking the mouse can be ignored.
+	auto later = [this](std::function<void()> fn) { QTimer::singleShot(0, this, std::move(fn)); };
+
 	QMenu menu(this);
 	QMenu *layouts = menu.addMenu(tr("Layout"));
-	ui::addLayoutActions(layouts, display_->layoutId(), [this](const std::string &id) { setLayoutId(id); onLayoutPicked(layoutBox_->currentIndex()); });
+	ui::addLayoutActions(layouts, display_->layoutId(), [this, later](const std::string &id) {
+		later([this, id] {
+			setLayoutId(id);
+			onLayoutPicked(layoutBox_->currentIndex());
+		});
+	});
 	QMenu *screens = menu.addMenu(tr("Open Fullscreen"));
-	ui::addScreenActions(screens, Settings::get().windowScreen, [](QScreen *screen) { App::get().openFullscreen(screen); });
+	ui::addScreenActions(screens, Settings::get().windowScreen, [later](QScreen *screen) {
+		QPointer<QScreen> guarded(screen);
+		later([guarded] {
+			if (guarded)
+				App::get().openFullscreen(guarded.data());
+		});
+	});
 	menu.addSeparator();
-	connect(menu.addAction(tr("Settings…")), &QAction::triggered, this, [] { App::get().openSettings(); });
+	connect(menu.addAction(tr("Settings…")), &QAction::triggered, this,
+		[later] { later([] { App::get().openSettings(); }); });
 	menu.exec(globalPos);
 }
 
