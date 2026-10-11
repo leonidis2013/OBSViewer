@@ -212,15 +212,15 @@ void ViewerState::refresh()
 	const bool rebuildNamed = namesChanged || heightChanged;
 	const bool rebuildStatic = heightChanged;
 	if (rebuildNamed) {
-		newLabels.program = createLabel("PROGRAM" + (programName.empty() ? "" : "  ·  " + programName), height,
-						kTileLabelScale);
-		newLabels.preview = createLabel("PREVIEW" + (previewName.empty() ? "" : "  ·  " + previewName), height,
-						kTileLabelScale);
-		newLabels.programName = createLabel(
-			"PGM   " + (programName.empty() ? std::string("—") : programName), height, kStatusLabelScale);
+		// Fixed titles plus the scene names on their own, so the titles never move.
+		newLabels.program = createLabel("PROGRAM", height, kTileLabelScale);
+		newLabels.preview = createLabel("PREVIEW", height, kTileLabelScale);
+		newLabels.programName = createLabel(programName.empty() ? std::string("—") : programName, height,
+						    kTileLabelScale);
+		newLabels.previewName = createLabel(previewName.empty() ? std::string("—") : previewName, height,
+						    kTileLabelScale);
 	}
 	if (rebuildStatic) {
-		newLabels.onAir = createLabel("ON AIR", height, kStatusLabelScale);
 		newLabels.rec = createLabel("REC", height, kStatusLabelScale);
 		newLabels.studioOff = createLabel("STUDIO MODE OFF", height, kTileLabelScale * 0.8f);
 	}
@@ -284,9 +284,9 @@ void ViewerState::refresh()
 			oldSources.push_back(std::exchange(labels_.program, newLabels.program));
 			oldSources.push_back(std::exchange(labels_.preview, newLabels.preview));
 			oldSources.push_back(std::exchange(labels_.programName, newLabels.programName));
+			oldSources.push_back(std::exchange(labels_.previewName, newLabels.previewName));
 		}
 		if (rebuildStatic) {
-			oldSources.push_back(std::exchange(labels_.onAir, newLabels.onAir));
 			oldSources.push_back(std::exchange(labels_.rec, newLabels.rec));
 			oldSources.push_back(std::exchange(labels_.studioOff, newLabels.studioOff));
 			oldSources.push_back(std::exchange(labels_.muted, newLabels.muted));
@@ -369,7 +369,7 @@ void ViewerState::clear()
 		renderScenes_.clear();
 		oldWeak.push_back(std::exchange(program_, nullptr));
 		oldWeak.push_back(std::exchange(preview_, nullptr));
-		for (obs_source_t **l : {&labels_.program, &labels_.preview, &labels_.onAir, &labels_.rec,
+		for (obs_source_t **l : {&labels_.program, &labels_.preview, &labels_.previewName, &labels_.rec,
 					 &labels_.programName, &labels_.studioOff, &labels_.muted})
 			oldSources.push_back(std::exchange(*l, nullptr));
 		sceneAudio_.clear();
@@ -403,7 +403,7 @@ ViewerState::Snapshot ViewerState::acquire()
 	}
 	snap.programLabel = obs_source_get_ref(labels_.program);
 	snap.previewLabel = obs_source_get_ref(labels_.preview);
-	snap.onAirLabel = obs_source_get_ref(labels_.onAir);
+	snap.previewNameLabel = obs_source_get_ref(labels_.previewName);
 	snap.recLabel = obs_source_get_ref(labels_.rec);
 	snap.programNameLabel = obs_source_get_ref(labels_.programName);
 	snap.studioOffLabel = obs_source_get_ref(labels_.studioOff);
@@ -431,7 +431,7 @@ void ViewerState::release(Snapshot &snap)
 		obs_source_release(s);
 	for (obs_source_t *s : snap.sceneLabels)
 		obs_source_release(s);
-	for (obs_source_t *s : {snap.programLabel, snap.previewLabel, snap.onAirLabel, snap.recLabel,
+	for (obs_source_t *s : {snap.programLabel, snap.previewLabel, snap.previewNameLabel, snap.recLabel,
 				snap.programNameLabel, snap.studioOffLabel, snap.mutedLabel})
 		obs_source_release(s);
 	snap = Snapshot{};

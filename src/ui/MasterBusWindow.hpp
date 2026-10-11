@@ -1,6 +1,9 @@
 #pragma once
 
 #include <QDialog>
+#include <QWidget>
+
+#include <functional>
 
 #include <string>
 #include <vector>
@@ -22,12 +25,20 @@ class StripButton;
 
 // Master bus as a vertical channel strip (LiveProfessor / Waves style):
 // power and inputs on top, insert slots, input trim, then the output fader with
-// stereo and gain-reduction meters. A plugin browser sits to the right.
-class MasterBusWindow : public QDialog {
+// stereo and gain-reduction meters. In its own window a plugin browser sits to
+// the right; embedded in the viewer (next to the side bar) only the strip shows.
+// Several panels can be open at once and keep each other up to date.
+class MasterBusPanel : public QWidget {
 public:
-	explicit MasterBusWindow(QWidget *parent = nullptr);
+	MasterBusPanel(bool embedded, QWidget *parent = nullptr);
+
+	// Header buttons: embedded → pop out / hide; window → show in the viewer.
+	std::function<void()> onPopOut;
+	std::function<void()> onHide;
+	std::function<void()> onDockIn;
 
 private:
+	std::string signature();
 	void refreshAll();
 	void refreshSlots();
 	void refreshStatus();
@@ -67,6 +78,17 @@ private:
 	QTimer *meterTimer_ = nullptr;
 	QTimer *scanTimer_ = nullptr;
 	bool updating_ = false;
+	std::string shownSignature_;
+};
+
+// The master bus in its own window.
+class MasterBusWindow : public QDialog {
+public:
+	explicit MasterBusWindow(QWidget *parent = nullptr);
+	MasterBusPanel *panel() const { return panel_; }
+
+private:
+	MasterBusPanel *panel_ = nullptr;
 };
 
 } // namespace obsviewer

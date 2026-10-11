@@ -22,6 +22,7 @@ public:
 
 	void setLayoutId(const std::string &id);
 	void applySettings();
+	MultiviewPanel *panel() const { return panel_; }
 
 	// Windowed at the last saved size and position.
 	void showWindowed();

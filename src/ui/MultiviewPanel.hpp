@@ -4,8 +4,11 @@
 
 #include <string>
 
+class QGridLayout;
+
 namespace obsviewer {
 
+class MasterBusPanel;
 class SidePanel;
 class ViewerDisplay;
 
@@ -23,12 +26,20 @@ public:
 	// Show / hide the side bar from Settings.
 	void applySettings();
 
+	// Master bus strip next to the side bar.
+	void setMasterBusVisible(bool visible);
+	bool masterBusVisible() const;
+	// Header button: embedded strip on / off, or the master bus window.
+	void masterBusButton();
+
 protected:
 	void paintEvent(QPaintEvent *event) override;
 
 private:
 	ViewerDisplay *display_ = nullptr;
 	SidePanel *side_ = nullptr;
+	MasterBusPanel *bus_ = nullptr;
+	QGridLayout *grid_ = nullptr;
 };
 
 } // namespace obsviewer

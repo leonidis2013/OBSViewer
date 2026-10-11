@@ -39,8 +39,10 @@ To uninstall, quit OBS and delete
 
 ## Master bus
 
-Tools ▸ OBSViewer ▸ **Master Bus…** (or right-click the multiview). The window is a
-channel strip, like LiveProfessor or Waves, with a plugin browser beside it.
+Click the **mixer icon** at the top of the side bar (or Tools ▸ OBSViewer ▸ **Master
+Bus…**). The bus is a channel strip, like LiveProfessor or Waves. It opens right next
+to the side bar; its pop-out icon moves it to its own window with a plugin browser,
+and the window's dock-in icon puts it back.
 
 1. Click **Scan** once. It finds the VST3 and Audio Unit effects on your Mac. Each
    plugin is checked in a separate helper, so a plugin that crashes can't take OBS

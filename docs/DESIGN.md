@@ -118,8 +118,14 @@ tests/                      host-side unit tests (layouts, versions) run in CI
   (red Program, green Preview, grey Preview when Studio Mode is off). A scene that is
   on Program gets a red band and a 2-px red frame; in Preview a green band and frame.
   Program and Preview tiles have no frame. Other tiles have a 1-device-pixel border.
-- Scene tiles are numbered ("1   Interview"); Program / Preview say PROGRAM / PREVIEW
-  and the scene name. "STUDIO MODE OFF" sits top-left on the Preview picture.
+- Scene tiles are numbered ("1   Interview"), centred. Program / Preview bands (0.6.2):
+  accent tab, fixed title PROGRAM / PREVIEW (both reserve the wider title's width, so
+  they line up), then the scene name left-aligned in its own darker field. "STUDIO
+  MODE OFF" sits top-left on the Preview picture.
+- Label size (0.6.2): text_ft2 puts every label's baseline at the font's tallest
+  glyph and only grows the texture for descenders, so all labels are scaled from one
+  reference height (the all-caps PROGRAM title) and top-aligned: same size and
+  baseline everywhere; a name only shrinks if it doesn't fit.
 - Clicks use the same placement (`placeTiles`), so a click on a label counts as the tile.
 
 ### 4.2 Layout presets
@@ -157,17 +163,21 @@ Dynamic once (`settings_version` < 2).
 Qt-drawn, LiveVoice style, in the dock (compact, 184 px) and the viewer window (236 px).
 There is no bottom bar any more; network and loudness history moved into the side bar.
 
-- **Header** — "OBSViewer" and the icon buttons (see 4.3).
+- **Header** — "OBSViewer" and the icon buttons: Master bus (mixer icon, 0.6.2), then
+  the view's own icons (see 4.3). Fullscreen screens in menus are ticked only while the
+  viewer is fullscreen on that screen.
 - **Health light** and **Performance light** — click to replace the sections with the
   full list of checks; click again to return. Only the health light can flash (red
   outline, Problem only, when "Flash the health light" is on).
 - **Stream** (teal) — Start stream / ON AIR hh:mm:ss / Reconnecting… (stop asks first);
+  disabled as "Stream not set up" while `obs_service_can_try_to_connect` is false (0.6.2);
   below it the network stats: upload in Mbps with peak, bitrate history for the last
   5 minutes (one bar per second: teal, amber with drops, red heavy drops /
   reconnecting), Dropped (network · encoder · render), Connection (status · uptime),
   Server (connect time · load).
 - **Record** (orange) — Start recording / REC / PAUSED (stop asks first); disk free
-  and hours left.
+  and hours left. Disabled as "No recording folder" while the configured path doesn't
+  exist (re-checked every 10 s) (0.6.2).
 - **Programme audio** (blue) — L / R sample peak and short-term loudness (ST) bars
   with LiveVoice zone colours (slate too quiet, blue quiet, green on target, amber
   hot, red over), 2-px peak hold (2 s), held values on top, target bracket behind
@@ -197,6 +207,7 @@ only for a Problem.
 
 ### Tile audio meters (stage 3, 0.3.0)
 
+- Always shown (0.6.2); a view with no audio gets grey empty tracks.
 - Two bars (L / R) at the right edge of each picture: RMS solid, peak tick; green,
   amber from −9 dBFS, red from −3 dBFS; scale −60 to 0 dBFS; 20 dB/s fall-back.
 - Scene tiles: loudest unmuted source among the scene's visible audio sources
@@ -236,6 +247,7 @@ Stored as JSON in `~/Library/Application Support/obs-studio/plugin_config/obsvie
 | `click_action` | `1` | Tile click: 0 off, 1 to Preview, 2 to Program. |
 | `show_sidebar` | `true` | Right-hand side bar. |
 | `alarms` | `true` | Flash the health light on a Problem. |
+| `master_bus_embedded` | `true` | Master bus opens next to the side bar (else in its own window). |
 | `loudness_preset` | `0` (YouTube −14) | Loudness target preset. |
 | `custom_target_lufs` | `-16` | Target when the preset is Custom. |
 | `meter_track` | `0` | 0 = follow the stream track, else Track 1–6. |
@@ -398,6 +410,19 @@ Vertical strip (LiveProfessor / Waves style) on the left, plugin browser on the 
   peak and GR. Footer: tracks in / out and latency.
 - **Browser**: search, maker ▸ plugin tree, Insert (after the selected slot, or at the
   end; double-click does the same), Scan, Rescan all, progress, failed plugins.
+
+### 8.4b Embedded strip (0.6.2)
+
+- `MasterBusPanel` is the strip (+ browser in a window). The viewer and the dock can
+  show it as a third column right of the side bar (strip only, 272 px; plugins go in
+  from an empty slot's menu). Header: pop out (→ window, setting off) and hide.
+  The window's header has dock-in (→ setting on, shown in the viewer, or the dock, or a
+  newly opened viewer window).
+- Setting `master_bus_embedded` (default on) decides where the mixer icon, Tools ▸
+  Master Bus… and right-click ▸ Master Bus… open it.
+- Several panels can be open; each compares a signature of the bus (on/off, routing,
+  tracks, plugin list, slots and bypass) on its meter tick and refreshes when another
+  view changed it. Trim and fader follow unless being dragged.
 
 ### 8.5 Not yet
 

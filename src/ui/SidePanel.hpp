@@ -23,7 +23,7 @@ class LoudnessHistory;
 // Small square header button with a drawn icon (settings, fullscreen, close…).
 class IconButton : public QAbstractButton {
 public:
-	enum class Icon { Settings, Fullscreen, Windowed, Close, PopOut };
+	enum class Icon { Settings, Fullscreen, Windowed, Close, PopOut, DockIn, Mixer };
 
 	IconButton(Icon icon, const QString &tip, QWidget *parent = nullptr);
 	void setIcon(Icon icon);

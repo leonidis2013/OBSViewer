@@ -26,6 +26,7 @@ private:
 	QCheckBox *showLabels_ = nullptr;
 	QCheckBox *showSidebar_ = nullptr;
 	QCheckBox *alarms_ = nullptr;
+	QCheckBox *busEmbedded_ = nullptr;
 	QCheckBox *tileMeters_ = nullptr;
 
 	QComboBox *loudnessPreset_ = nullptr;

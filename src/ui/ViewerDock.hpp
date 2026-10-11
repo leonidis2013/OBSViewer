@@ -18,6 +18,7 @@ public:
 
 	void setLayoutId(const std::string &id);
 	void applySettings();
+	MultiviewPanel *panel() const { return panel_; }
 
 private:
 	void pickLayout(const std::string &id);

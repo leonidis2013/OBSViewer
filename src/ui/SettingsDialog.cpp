@@ -77,6 +77,8 @@ SettingsDialog::SettingsDialog(QWidget *parent) : QDialog(parent)
 	viewForm->addRow(QString(), tileMeters_);
 	viewForm->addRow(QString(), showSidebar_);
 	viewForm->addRow(QString(), alarms_);
+	busEmbedded_ = new QCheckBox(tr("Open the master bus next to the side bar (instead of its own window)"), viewGroup);
+	viewForm->addRow(QString(), busEmbedded_);
 	auto describe = [this](QComboBox *box) {
 		layoutHelp_->setText(QString::fromStdString(layoutById(box->currentData().toString().toStdString()).description));
 	};
@@ -194,6 +196,7 @@ void SettingsDialog::load()
 	showLabels_->setChecked(s.showLabels);
 	showSidebar_->setChecked(s.showSidebar);
 	alarms_->setChecked(s.alarms);
+	busEmbedded_->setChecked(s.masterBusEmbedded);
 	tileMeters_->setChecked(s.tileMeters);
 	loudnessPreset_->setCurrentIndex(std::clamp(s.loudnessPreset, 0, bm::kNumLoudnessPresets - 1));
 	customTarget_->setValue(s.customTargetLufs);
@@ -222,6 +225,7 @@ void SettingsDialog::apply()
 	s.showLabels = showLabels_->isChecked();
 	s.showSidebar = showSidebar_->isChecked();
 	s.alarms = alarms_->isChecked();
+	s.masterBusEmbedded = busEmbedded_->isChecked();
 	s.tileMeters = tileMeters_->isChecked();
 	s.loudnessPreset = loudnessPreset_->currentIndex();
 	s.customTargetLufs = static_cast<float>(customTarget_->value());

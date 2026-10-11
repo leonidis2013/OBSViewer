@@ -5,6 +5,7 @@
 #include "ui/MasterBusWindow.hpp"
 #include "metrics/Metrics.hpp"
 #include "ui/Menu.hpp"
+#include "ui/MultiviewPanel.hpp"
 #include "ui/SettingsDialog.hpp"
 #include "ui/ViewerDock.hpp"
 #include "ui/ViewerWindow.hpp"
@@ -182,6 +183,13 @@ bool App::viewerOpen() const
 	return !viewer_.isNull();
 }
 
+std::string App::fullscreenScreenName() const
+{
+	if (!viewer_ || !viewer_->fullscreen() || !viewer_->isVisible() || !viewer_->screen())
+		return {};
+	return viewer_->screen()->name().toStdString();
+}
+
 ViewerWindow *App::ensureViewer()
 {
 	if (!viewer_) {
@@ -273,8 +281,31 @@ void App::openSettings(QWidget *parent)
 	obs_log(LOG_INFO, "settings: visible=%d", settings_->isVisible());
 }
 
+MultiviewPanel *App::masterBusHost(QWidget *from)
+{
+	QWidget *w = from ? from->window() : nullptr;
+	if (viewer_ && w == viewer_.data())
+		return viewer_->panel();
+	if (dock_ && from && (from == dock_.data() || dock_->isAncestorOf(from)))
+		return dock_->panel();
+	if (viewer_ && viewer_->isVisible())
+		return viewer_->panel();
+	if (dock_ && dock_->isVisible())
+		return dock_->panel();
+	// Nothing open to put it in: open the viewer window.
+	openWindowed();
+	return viewer_ ? viewer_->panel() : nullptr;
+}
+
 void App::openMasterBus(QWidget *parent)
 {
+	if (Settings::get().masterBusEmbedded) {
+		if (MultiviewPanel *host = masterBusHost(parent)) {
+			obs_log(LOG_INFO, "master bus: showing next to the side bar");
+			host->setMasterBusVisible(true);
+			return;
+		}
+	}
 	obs_log(LOG_INFO, "master bus: opening window");
 	if (!parent)
 		parent = static_cast<QWidget *>(obs_frontend_get_main_window());
@@ -285,6 +316,14 @@ void App::openMasterBus(QWidget *parent)
 	if (!masterBus_) {
 		masterBus_ = new MasterBusWindow(parent);
 		masterBus_->setAttribute(Qt::WA_DeleteOnClose);
+		QPointer<MasterBusWindow> window = masterBus_;
+		masterBus_->panel()->onDockIn = [this, window] {
+			Settings::get().masterBusEmbedded = true;
+			Settings::get().save();
+			if (window)
+				window->close();
+			openMasterBus(nullptr);
+		};
 	}
 	masterBus_->show();
 	masterBus_->raise();

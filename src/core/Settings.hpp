@@ -17,6 +17,7 @@ struct Settings {
 
 	bool showSidebar = true; // health, stream, network, record and audio on the right
 	bool alarms = true;      // flash the health light when something is wrong
+	bool masterBusEmbedded = true; // master bus opens next to the side bar (else in its own window)
 	bool tileMeters = true;  // audio meters on each tile
 
 	// Audio

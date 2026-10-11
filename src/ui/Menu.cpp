@@ -111,17 +111,17 @@ void buildViewerMenu(QMenu &menu, const std::string &layoutId, const std::functi
 	case MenuContext::Dock:
 		QObject::connect(menu.addAction(QStringLiteral("Open in Window")), &QAction::triggered, &menu,
 				 [] { later([] { App::get().openWindowed(); }); });
-		addScreenActions(menu.addMenu(QStringLiteral("Open Fullscreen")), Settings::get().windowScreen,
+		addScreenActions(menu.addMenu(QStringLiteral("Open Fullscreen")), App::get().fullscreenScreenName(),
 				 openFullscreenOn);
 		break;
 	case MenuContext::Window:
-		addScreenActions(menu.addMenu(QStringLiteral("Fullscreen On")), Settings::get().windowScreen,
+		addScreenActions(menu.addMenu(QStringLiteral("Fullscreen On")), App::get().fullscreenScreenName(),
 				 openFullscreenOn);
 		break;
 	case MenuContext::Fullscreen:
 		QObject::connect(menu.addAction(QStringLiteral("Exit Fullscreen")), &QAction::triggered, &menu,
 				 [] { later([] { App::get().openWindowed(); }); });
-		addScreenActions(menu.addMenu(QStringLiteral("Move to Screen")), Settings::get().windowScreen,
+		addScreenActions(menu.addMenu(QStringLiteral("Move to Screen")), App::get().fullscreenScreenName(),
 				 openFullscreenOn);
 		break;
 	}
@@ -192,7 +192,8 @@ void ScreenMenu::rebuild()
 
 void ScreenMenu::refreshState()
 {
-	const QString current = QString::fromStdString(Settings::get().windowScreen);
+	// Ticked only while the viewer really is fullscreen on that screen.
+	const QString current = QString::fromStdString(App::get().fullscreenScreenName());
 	for (QAction *action : actions()) {
 		if (action->isCheckable())
 			action->setChecked(!current.isEmpty() && action->data().toString() == current);

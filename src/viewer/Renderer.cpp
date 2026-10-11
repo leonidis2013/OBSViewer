@@ -113,29 +113,76 @@ void drawTileNote(obs_source_t *label, const Rect &r, float pad, float maxHeight
 	drawLabelAt(label, r.x + pad * 1.6f, r.y + pad, s, theme::kLabelPlate, pad * 0.6f);
 }
 
-// Label band under the picture: tinted when the scene is on Program / in
-// Preview, a small LiveVoice-style accent tab on the left, name centred.
-void drawLabelBand(obs_source_t *label, const Rect &band, uint32_t fill, uint32_t tab, float px)
+// Labels are text_ft2 sources: every label made with the same font has its
+// baseline at the same distance from the top (the font's tallest glyph), and only
+// gets taller when the text has descenders. So every label is scaled from one
+// reference height (the all-caps "PROGRAM" title) and top-aligned: same size and
+// same baseline everywhere, whatever the text.
+struct LabelMetrics {
+	float refH = 0; // height of an all-caps label
+	float scale = 1;
+	float top = 0; // offset from the band top
+};
+
+LabelMetrics labelMetrics(obs_source_t *reference, const Rect &band)
+{
+	LabelMetrics m;
+	m.refH = reference ? static_cast<float>(obs_source_get_height(reference)) : 0.0f;
+	if (m.refH <= 0.0f)
+		m.refH = 40.0f;
+	m.scale = band.h * 0.5f / m.refH;
+	m.top = (band.h - m.refH * m.scale) / 2.0f;
+	return m;
+}
+
+// Draws `label` with its left edge at x (or centred in [x, x + w] when centre is
+// set), shrunk only if it doesn't fit in w.
+void drawLabelText(obs_source_t *label, const LabelMetrics &m, const Rect &band, float x, float w, bool centre)
+{
+	if (!label || w <= 4.0f)
+		return;
+	const float lw = static_cast<float>(obs_source_get_width(label));
+	if (lw <= 0.0f)
+		return;
+	float s = m.scale;
+	if (lw * s > w)
+		s = w / lw;
+	const float y = band.y + m.top + (m.refH * (m.scale - s)) / 2.0f;
+	const float lx = centre ? x + (w - lw * s) / 2.0f : x;
+	drawLabelAt(label, lx, y, s, 0, 0);
+}
+
+// Scene band: tinted when the scene is on Program / in Preview, name centred.
+void drawSceneBand(obs_source_t *label, obs_source_t *reference, const Rect &band, uint32_t fill)
 {
 	if (band.h <= 0.0f)
 		return;
 	drawBox(band.x, band.y, band.w, band.h, fill);
+	const LabelMetrics m = labelMetrics(reference, band);
+	drawLabelText(label, m, band, band.x + 8.0f, band.w - 16.0f, true);
+}
+
+// Program / Preview band: accent tab, a fixed title ("PROGRAM" / "PREVIEW") that
+// never moves, and the scene name in its own field to the right of it.
+void drawTitleBand(obs_source_t *title, obs_source_t *name, obs_source_t *reference, float titleW,
+		   const Rect &band, uint32_t tab)
+{
+	if (band.h <= 0.0f)
+		return;
+	drawBox(band.x, band.y, band.w, band.h, theme::kPanel);
 	const float tabH = std::min(band.h * 0.5f, 12.0f);
-	if (tab)
-		drawBox(band.x + 6.0f, band.y + (band.h - tabH) / 2.0f, 3.0f, tabH, tab);
-	if (!label)
+	drawBox(band.x + 6.0f, band.y + (band.h - tabH) / 2.0f, 3.0f, tabH, tab);
+	const LabelMetrics m = labelMetrics(reference, band);
+	const float titleX = band.x + 16.0f;
+	const float titleWidth = titleW * m.scale;
+	drawLabelText(title, m, band, titleX, titleWidth, false);
+
+	const float fx = titleX + titleWidth + 10.0f;
+	const float fw = band.x + band.w - 4.0f - fx;
+	if (fw <= 20.0f)
 		return;
-	const float lw = static_cast<float>(obs_source_get_width(label));
-	const float lh = static_cast<float>(obs_source_get_height(label));
-	if (lw <= 0.0f || lh <= 0.0f)
-		return;
-	const float maxW = band.w - 30.0f;
-	if (maxW <= 4.0f)
-		return;
-	const float s = std::min({band.h * 0.6f / lh, maxW / lw, 1.0f});
-	const float x = band.x + (band.w - lw * s) / 2.0f;
-	const float y = band.y + (band.h - lh * s) / 2.0f + 0.5f * px;
-	drawLabelAt(label, x, y, s, 0, 0);
+	drawBox(fx, band.y + 3.0f, fw, band.h - 6.0f, theme::kBg);
+	drawLabelText(name, m, band, fx + 8.0f, fw - 16.0f, false);
 }
 
 uint32_t levelColor(float db)
@@ -159,11 +206,10 @@ levels::TileLevels readTile(const AudioList &list, uint64_t now)
 
 // Two thin bars (L / R) at the right edge of the picture: RMS as a solid bar,
 // peak as a tick, red cap when clipping, red tint and a MUTED tag when muted.
+// Always drawn; greyed out (empty grey tracks) when the view has no audio.
 void drawTileMeter(const levels::TileLevels &t, const Rect &pic, float px, float pad, obs_source_t *mutedLabel,
 		   float maxLabel)
 {
-	if (!t.hasAudio)
-		return;
 	const float barW = std::max(3.0f * px, pic.w * 0.011f);
 	const float gap = 1.0f * px;
 	const float h = pic.h - 2 * pad;
@@ -172,7 +218,13 @@ void drawTileMeter(const levels::TileLevels &t, const Rect &pic, float px, float
 	if (h <= 0 || x0 <= pic.x)
 		return;
 
-	drawBox(x0 - gap, y0 - gap, 2 * barW + 3 * gap, h + 2 * gap, t.allMuted ? 0xCC4A1416 : theme::kLabelPlate);
+	drawBox(x0 - gap, y0 - gap, 2 * barW + 3 * gap, h + 2 * gap,
+		t.hasAudio && t.allMuted ? 0xCC4A1416 : theme::kLabelPlate);
+	// tracks: dark when the view has audio, grey when it has none
+	for (int c = 0; c < 2; ++c)
+		drawBox(x0 + c * (barW + gap), y0, barW, h, t.hasAudio ? theme::kGrid : 0xFF353C46);
+	if (!t.hasAudio)
+		return;
 
 	for (int c = 0; c < 2; ++c) {
 		const float x = x0 + c * (barW + gap);
@@ -242,6 +294,11 @@ void Renderer::render(const std::string &layoutId, uint32_t cx, uint32_t cy, flo
 	startRegion(0, 0, static_cast<int>(cx), static_cast<int>(cy), 0.0f, W, 0.0f, H);
 	drawBox(0, 0, W, H, theme::kBg);
 	const uint64_t now = os_gettime_ns();
+	// Width of the wider title, so Program and Preview bands line up the same.
+	float titleW = 0.0f;
+	for (obs_source_t *t : {snap.programLabel, snap.previewLabel})
+		if (t)
+			titleW = std::max(titleW, static_cast<float>(obs_source_get_width(t)));
 
 	for (const PlacedTile &tile : tiles) {
 		const Rect pic{tile.picture.x, tile.picture.y, tile.picture.w, tile.picture.h};
@@ -316,7 +373,11 @@ void Renderer::render(const std::string &layoutId, uint32_t cx, uint32_t cy, flo
 		}
 
 		if (snap.showLabels) {
-			drawLabelBand(label, band, bandFill, active ? 0 : tab, px);
+			if (tile.kind == TileKind::Scene)
+				drawSceneBand(label, snap.programLabel, band, bandFill);
+			else
+				drawTitleBand(label, isProgram ? snap.programNameLabel : snap.previewNameLabel, snap.programLabel,
+					      titleW, band, tab);
 			if (previewFallback)
 				drawTileNote(snap.studioOffLabel, pic, pad, std::max(10.0f, pic.h * 0.08f));
 		}

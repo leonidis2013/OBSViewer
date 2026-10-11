@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.6.2] — 2026-10-10
+
+- **Master bus in the viewer:** a new mixer icon at the top of the side bar opens the master bus strip right next to the side bar, in the dock or the viewer window. Its pop-out icon moves it to its own window (with the plugin browser); in the window, the dock-in icon puts it back beside the side bar. Your choice is remembered (also in Settings).
+- **Preview and Program titles stay put:** "PREVIEW" and "PROGRAM" are fixed titles, and the scene name sits in its own field beside them, so nothing shifts when scenes change.
+- **All view names are the same size.** Names with letters like g or y were drawn smaller before.
+- **Audio meters show on every view.** A view without audio shows a greyed-out meter.
+- **Start stream / Start recording are greyed out until OBS is set up:** "Stream not set up" until a service and key are set, and "No recording folder" while the recording path doesn't exist.
+- **Fullscreen screens are only ticked while the viewer really is fullscreen** on that screen (Tools menu and right-click menu).
+
+
 ## [0.6.1] — 2026-10-10
 
 - **Updates now restart OBS for you.** After an update downloads and is verified, click **Restart OBS**: OBS closes, the update installs (no password needed), and OBS opens again with the new version. This replaces "Quit OBS". If you're streaming or recording, OBS still asks before closing; if you cancel, the dialog lets you try again or cancel the update. **Install Manually…** opens the installer the old way.

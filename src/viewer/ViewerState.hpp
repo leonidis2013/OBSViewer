@@ -32,9 +32,9 @@ public:
 		std::vector<obs_source_t *> sceneLabels; // parallel to scenes, may contain nullptr
 		obs_source_t *programLabel = nullptr;
 		obs_source_t *previewLabel = nullptr;
-		obs_source_t *onAirLabel = nullptr;
+		obs_source_t *previewNameLabel = nullptr; // scene name only
 		obs_source_t *recLabel = nullptr;
-		obs_source_t *programNameLabel = nullptr;
+		obs_source_t *programNameLabel = nullptr; // scene name only
 		obs_source_t *studioOffLabel = nullptr;
 		obs_source_t *mutedLabel = nullptr;
 		std::vector<AudioList> sceneAudio; // parallel to scenes
@@ -80,7 +80,7 @@ private:
 	struct Labels {
 		obs_source_t *program = nullptr;
 		obs_source_t *preview = nullptr;
-		obs_source_t *onAir = nullptr;
+		obs_source_t *previewName = nullptr;
 		obs_source_t *rec = nullptr;
 		obs_source_t *programName = nullptr;
 		obs_source_t *studioOff = nullptr;

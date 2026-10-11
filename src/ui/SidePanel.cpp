@@ -110,6 +110,29 @@ void IconButton::paintEvent(QPaintEvent *)
 		p.drawLine(c + QPointF(-u * 0.7, -u * 0.7), c + QPointF(u * 0.7, u * 0.7));
 		p.drawLine(c + QPointF(u * 0.7, -u * 0.7), c + QPointF(-u * 0.7, u * 0.7));
 		break;
+	case Icon::Mixer: {
+		// three faders with their caps at different heights
+		const qreal xs[3] = {c.x() - u * 0.75, c.x(), c.x() + u * 0.75};
+		const qreal caps[3] = {0.35, -0.45, 0.1};
+		for (int i = 0; i < 3; ++i) {
+			p.drawLine(QPointF(xs[i], c.y() - u), QPointF(xs[i], c.y() + u));
+			p.setBrush(ink);
+			p.drawRoundedRect(QRectF(xs[i] - 2.2, c.y() + caps[i] * u - 1.6, 4.4, 3.2), 1, 1);
+			p.setBrush(Qt::NoBrush);
+		}
+		break;
+	}
+	case Icon::DockIn: {
+		// window with an arrow coming into its bottom-left corner
+		const QRectF box(c.x() - u * 0.45, c.y() - u, u * 1.45, u * 1.55);
+		p.drawRoundedRect(box, 1.5, 1.5);
+		const QPointF tip(c.x() - u * 0.15, c.y() + u * 0.25);
+		const QPointF tail(c.x() - u, c.y() + u);
+		p.drawLine(tail, tip);
+		p.drawLine(tip, tip + QPointF(-u * 0.6, 0));
+		p.drawLine(tip, tip + QPointF(0, u * 0.6));
+		break;
+	}
 	case Icon::PopOut: {
 		// window with an arrow leaving its top-right corner
 		const QRectF box(c.x() - u, c.y() - u * 0.55, u * 1.45, u * 1.55);
@@ -274,8 +297,12 @@ class StateButton : public QAbstractButton {
 public:
 	explicit StateButton(QWidget *parent) : QAbstractButton(parent) { setCursor(Qt::PointingHandCursor); }
 
-	void setLook(const QString &label, uint32_t fill, uint32_t textColor, bool outlined, qreal scale)
+	void setLook(const QString &label, uint32_t fill, uint32_t textColor, bool outlined, qreal scale,
+		     bool enabled = true, const QString &tip = QString())
 	{
+		setEnabled(enabled);
+		setCursor(enabled ? Qt::PointingHandCursor : Qt::ArrowCursor);
+		setToolTip(tip);
 		label_ = label;
 		fill_ = fill;
 		text_ = textColor;
@@ -291,7 +318,7 @@ protected:
 		QPainter p(this);
 		p.setRenderHint(QPainter::Antialiasing);
 		QColor fill = col(fill_);
-		if (underMouse())
+		if (underMouse() && isEnabled())
 			fill = fill.lighter(isDown() ? 95 : 118);
 		p.setPen(outlined_ ? QPen(col(theme::kBorder), 1.0) : Qt::NoPen);
 		p.setBrush(fill);
@@ -789,6 +816,15 @@ private:
 
 // ---------------------------------------------------------------------------
 
+namespace {
+// True when OBS has what it needs to try to stream (service, server and key).
+bool streamConfigured()
+{
+	obs_service_t *service = obs_frontend_get_streaming_service();
+	return service && obs_service_can_try_to_connect(service);
+}
+} // namespace
+
 SidePanel::SidePanel(QWidget *parent) : QWidget(parent)
 {
 	setAttribute(Qt::WA_StyledBackground, false);
@@ -930,6 +966,9 @@ void SidePanel::refresh()
 				       0xFFFFFFFF, false, s);
 	else if (now < streamPendingUntil_)
 		streamButton_->setLook(QStringLiteral("Starting…"), theme::kPanelRaised, theme::kTextDim, true, s);
+	else if (!streamConfigured())
+		streamButton_->setLook(QStringLiteral("Stream not set up"), theme::kPanel, theme::kTextFaint, true, s, false,
+				       QStringLiteral("Choose a service and stream key in OBS Settings ▸ Stream first."));
 	else
 		streamButton_->setLook(QStringLiteral("Start stream"), theme::kPanelRaised, theme::kText, true, s);
 	network_->update();
@@ -945,6 +984,9 @@ void SidePanel::refresh()
 				       0xFFFFFFFF, false, s);
 	else if (now < recordPendingUntil_)
 		recordButton_->setLook(QStringLiteral("Starting…"), theme::kPanelRaised, theme::kTextDim, true, s);
+	else if (m.record.diskFreeGB < 0.0)
+		recordButton_->setLook(QStringLiteral("No recording folder"), theme::kPanel, theme::kTextFaint, true, s, false,
+				       QStringLiteral("Choose a recording path in OBS Settings ▸ Output ▸ Recording first."));
 	else
 		recordButton_->setLook(QStringLiteral("Start recording"), theme::kPanelRaised, theme::kText, true, s);
 

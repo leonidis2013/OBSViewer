@@ -3,6 +3,8 @@
 #include <QObject>
 #include <QPointer>
 
+#include <string>
+
 #include <obs-frontend-api.h>
 
 class QMenu;
@@ -16,6 +18,7 @@ class ViewerDock;
 class ViewerWindow;
 class SettingsDialog;
 class MasterBusWindow;
+class MultiviewPanel;
 class Updater;
 
 // Owns OBSViewer's UI objects and wires them to OBS. Qt main thread only.
@@ -35,8 +38,12 @@ public:
 	void toggleViewerMode();
 	void closeViewer();
 	bool viewerOpen() const;
+	// Name of the screen the viewer is fullscreen on; empty when it isn't fullscreen.
+	std::string fullscreenScreenName() const;
 	// parent: the window asking (so the dialog opens on top of fullscreen), or null for OBS.
 	void openSettings(QWidget *parent = nullptr);
+	// Next to the side bar of the asking view (Settings ▸ embedded, the default), or
+	// in its own window.
 	void openMasterBus(QWidget *parent = nullptr);
 	// action: Settings::ClickPreview or Settings::ClickProgram.
 	void switchScene(int sceneIndex, int action);
@@ -56,6 +63,8 @@ private:
 	void handleFrontendEvent(enum obs_frontend_event event);
 	void buildToolsMenu();
 	ViewerWindow *ensureViewer();
+	// Where an embedded master bus goes for a request from `from`.
+	MultiviewPanel *masterBusHost(QWidget *from);
 
 	QPointer<ViewerDock> dock_;
 	QPointer<ViewerWindow> viewer_;

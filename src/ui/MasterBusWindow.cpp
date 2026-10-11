@@ -3,6 +3,7 @@
 #include "bus/Engine.hpp"
 #include "bus/MasterBus.hpp"
 #include "ui/Paint.hpp"
+#include "ui/SidePanel.hpp"
 #include "ui/Theme.hpp"
 
 #include <plugin-support.h>
@@ -419,6 +420,7 @@ public:
 		update();
 	}
 	float value() const { return value_; }
+	bool dragging() const { return dragging_; }
 
 protected:
 	void change(float db)
@@ -467,9 +469,11 @@ protected:
 
 	void mousePressEvent(QMouseEvent *e) override
 	{
+		dragging_ = true;
 		dragY_ = e->position().y();
 		dragStart_ = value_;
 	}
+	void mouseReleaseEvent(QMouseEvent *) override { dragging_ = false; }
 	void mouseMoveEvent(QMouseEvent *e) override
 	{
 		if (!(e->buttons() & Qt::LeftButton))
@@ -489,6 +493,7 @@ private:
 	QString label_;
 	float min_, max_;
 	float value_ = 0.0f;
+	bool dragging_ = false;
 	qreal dragY_ = 0;
 	float dragStart_ = 0.0f;
 };
@@ -506,6 +511,7 @@ public:
 	}
 
 	std::function<void(float)> onChange;
+	bool dragging() const { return dragging_; }
 
 	void setFader(float db)
 	{
@@ -884,6 +890,20 @@ public:
 	}
 	QVBoxLayout *body() const { return layout_; }
 
+	// Small buttons on the right of the title row.
+	void addHeaderWidget(QWidget *w)
+	{
+		if (!header_) {
+			header_ = new QHBoxLayout();
+			header_->setContentsMargins(0, 0, 0, 0);
+			header_->setSpacing(2);
+			header_->addStretch(1);
+			layout_->insertLayout(0, header_);
+			layout_->setContentsMargins(10, 6, 6, 10);
+		}
+		header_->addWidget(w);
+	}
+
 protected:
 	void paintEvent(QPaintEvent *) override
 	{
@@ -896,6 +916,7 @@ private:
 	QString title_;
 	uint32_t accent_;
 	QVBoxLayout *layout_;
+	QHBoxLayout *header_ = nullptr;
 };
 
 QLabel *dimLabel(const QString &text, QWidget *parent)
@@ -915,17 +936,36 @@ QWidget *divider(const QString &text, QWidget *parent)
 
 } // namespace
 
-MasterBusWindow::MasterBusWindow(QWidget *parent) : QDialog(parent)
+MasterBusPanel::MasterBusPanel(bool embedded, QWidget *parent) : QWidget(parent)
 {
-	setObjectName(QStringLiteral("OBSViewerDialog"));
-	setStyleSheet(theme::styleSheet());
-	setWindowTitle(QStringLiteral("OBSViewer Master Bus"));
-	resize(700, 820);
-
 	// =============== channel strip ===============
 	auto *strip = new PanelBox(QStringLiteral("Master Bus"), theme::kAccentBlue, this);
 	strip->setFixedWidth(272);
 	QVBoxLayout *sl = strip->body();
+	QPointer<MasterBusPanel> guard(this);
+	// Header buttons call back after the click has finished (the owner may hide or delete us).
+	auto deferred = [guard](std::function<void()> MasterBusPanel::*member) {
+		return [guard, member] {
+			QTimer::singleShot(0, guard, [guard, member] {
+				if (guard && guard->*member)
+					(guard->*member)();
+			});
+		};
+	};
+	if (embedded) {
+		auto *pop = new IconButton(IconButton::Icon::PopOut,
+					   QStringLiteral("Open in its own window (with the plugin browser)"), strip);
+		connect(pop, &QAbstractButton::clicked, this, deferred(&MasterBusPanel::onPopOut));
+		strip->addHeaderWidget(pop);
+		auto *close = new IconButton(IconButton::Icon::Close, QStringLiteral("Hide the master bus"), strip);
+		connect(close, &QAbstractButton::clicked, this, deferred(&MasterBusPanel::onHide));
+		strip->addHeaderWidget(close);
+	} else {
+		auto *dock = new IconButton(IconButton::Icon::DockIn, QStringLiteral("Show in the viewer, next to the side bar"),
+					    strip);
+		connect(dock, &QAbstractButton::clicked, this, deferred(&MasterBusPanel::onDockIn));
+		strip->addHeaderWidget(dock);
+	}
 
 	power_ = new PowerButton(strip);
 	status_ = new QLabel(strip);
@@ -1006,10 +1046,14 @@ MasterBusWindow::MasterBusWindow(QWidget *parent) : QDialog(parent)
 	bl->addWidget(failed_);
 
 	auto *layout = new QHBoxLayout(this);
-	layout->setContentsMargins(12, 12, 12, 12);
+	layout->setContentsMargins(embedded ? 0 : 12, embedded ? 0 : 12, embedded ? 0 : 12, embedded ? 0 : 12);
 	layout->setSpacing(10);
 	layout->addWidget(strip);
 	layout->addWidget(browser, 1);
+	// In the viewer only the strip shows; plugins go in from an empty slot's menu.
+	browser->setVisible(!embedded);
+	if (embedded)
+		setFixedWidth(272);
 
 	// =============== behaviour ===============
 	connect(power_, &QAbstractButton::toggled, this, [this](bool on) {
@@ -1054,12 +1098,20 @@ MasterBusWindow::MasterBusWindow(QWidget *parent) : QDialog(parent)
 		}
 		const bus::Levels m = engine.masterLevels();
 		fader_->setLevels(m.post[0], m.post[1], total);
+
+		// Another master bus view (window or viewer) changed something: catch up.
+		if (signature() != shownSignature_)
+			refreshAll();
+		else if (!fader_->dragging())
+			fader_->setFader(engine.masterOutDb());
+		if (!trim_->dragging())
+			trim_->setValue(engine.masterInDb());
 	});
 	meterTimer_->start();
 
 	scanTimer_ = new QTimer(this);
 	scanTimer_->setInterval(30);
-	connect(scanTimer_, &QTimer::timeout, this, &MasterBusWindow::scanTick);
+	connect(scanTimer_, &QTimer::timeout, this, &MasterBusPanel::scanTick);
 
 	refreshAll();
 
@@ -1078,7 +1130,21 @@ MasterBusWindow::MasterBusWindow(QWidget *parent) : QDialog(parent)
 	}
 }
 
-void MasterBusWindow::refreshAll()
+std::string MasterBusPanel::signature()
+{
+	bus::Engine &engine = bus::Engine::get();
+	const MasterBus &bus = MasterBus::get();
+	std::string sig = std::to_string(bus.enabled()) + "|" + std::to_string(bus.routedCount()) + "|" +
+			  std::to_string(bus.config().sendTrack) + "|" + std::to_string(bus.config().outputMask) + "|" +
+			  std::to_string(engine.plugins().size());
+	for (int i = 0; i < engine.slotCount(); ++i) {
+		const bus::SlotInfo info = engine.slot(i);
+		sig += "|" + info.name + (info.bypass ? "-" : "+");
+	}
+	return sig;
+}
+
+void MasterBusPanel::refreshAll()
 {
 	updating_ = true;
 	power_->setChecked(MasterBus::get().enabled());
@@ -1090,7 +1156,7 @@ void MasterBusWindow::refreshAll()
 	refreshBrowser();
 }
 
-void MasterBusWindow::refreshSlots()
+void MasterBusPanel::refreshSlots()
 {
 	for (SlotWidget *w : slots_)
 		w->deleteLater();
@@ -1100,7 +1166,7 @@ void MasterBusWindow::refreshSlots()
 		delete child;
 
 	SlotWidget::Callbacks cb;
-	QPointer<MasterBusWindow> self(this);
+	QPointer<MasterBusPanel> self(this);
 	cb.select = [self](int i) {
 		if (self)
 			self->selectSlot(i);
@@ -1149,16 +1215,17 @@ void MasterBusWindow::refreshSlots()
 	}
 	slotsLayout_->addStretch(1);
 	refreshStatus();
+	shownSignature_ = signature();
 }
 
-void MasterBusWindow::selectSlot(int index)
+void MasterBusPanel::selectSlot(int index)
 {
 	selected_ = index;
 	for (size_t i = 0; i < slots_.size(); ++i)
 		slots_[i]->setSelected(static_cast<int>(i) == index);
 }
 
-void MasterBusWindow::refreshStatus()
+void MasterBusPanel::refreshStatus()
 {
 	const MasterBus &bus = MasterBus::get();
 	const int routed = bus.routedCount();
@@ -1187,7 +1254,7 @@ void MasterBusWindow::refreshStatus()
 					      : QStringLiteral("No added latency")));
 }
 
-void MasterBusWindow::refreshBrowser()
+void MasterBusPanel::refreshBrowser()
 {
 	const QString filter = search_->text().trimmed();
 	QString keep;
@@ -1235,7 +1302,7 @@ void MasterBusWindow::refreshBrowser()
 	}
 }
 
-void MasterBusWindow::insertFromBrowser()
+void MasterBusPanel::insertFromBrowser()
 {
 	QTreeWidgetItem *item = tree_->currentItem();
 	if (!item || item->data(0, Qt::UserRole).toString().isEmpty()) {
@@ -1248,7 +1315,7 @@ void MasterBusWindow::insertFromBrowser()
 	insertPlugin(item->data(0, Qt::UserRole).toString().toStdString(), at);
 }
 
-void MasterBusWindow::insertPlugin(const std::string &id, int index)
+void MasterBusPanel::insertPlugin(const std::string &id, int index)
 {
 	std::string error;
 	scanStatus_->setText(QStringLiteral("Loading plugin…"));
@@ -1267,7 +1334,7 @@ void MasterBusWindow::insertPlugin(const std::string &id, int index)
 	bus::Engine::get().openEditor(index);
 }
 
-void MasterBusWindow::replacePlugin(const std::string &id, int index)
+void MasterBusPanel::replacePlugin(const std::string &id, int index)
 {
 	std::string error;
 	if (!bus::Engine::get().addPlugin(id, error, index)) {
@@ -1282,7 +1349,7 @@ void MasterBusWindow::replacePlugin(const std::string &id, int index)
 	bus::Engine::get().openEditor(index);
 }
 
-void MasterBusWindow::showInsertMenu(int index, const QPoint &globalPos)
+void MasterBusPanel::showInsertMenu(int index, const QPoint &globalPos)
 {
 	selectSlot(index);
 	QMenu menu(this);
@@ -1292,7 +1359,7 @@ void MasterBusWindow::showInsertMenu(int index, const QPoint &globalPos)
 	menu.exec(globalPos);
 }
 
-void MasterBusWindow::showSlotMenu(int index, const QPoint &globalPos)
+void MasterBusPanel::showSlotMenu(int index, const QPoint &globalPos)
 {
 	selectSlot(index);
 	bus::Engine &engine = bus::Engine::get();
@@ -1348,9 +1415,9 @@ void MasterBusWindow::showSlotMenu(int index, const QPoint &globalPos)
 	menu.exec(globalPos);
 }
 
-void MasterBusWindow::showInputs()
+void MasterBusPanel::showInputs()
 {
-	QPointer<MasterBusWindow> self(this);
+	QPointer<MasterBusPanel> self(this);
 	auto *popup = new InputsPopup(this, [self] {
 		if (self)
 			self->refreshStatus();
@@ -1361,7 +1428,7 @@ void MasterBusWindow::showInputs()
 	popup->show();
 }
 
-void MasterBusWindow::startScan(bool rescanAll)
+void MasterBusPanel::startScan(bool rescanAll)
 {
 	if (scanTimer_->isActive())
 		return;
@@ -1382,7 +1449,7 @@ void MasterBusWindow::startScan(bool rescanAll)
 	scanTimer_->start();
 }
 
-void MasterBusWindow::scanTick()
+void MasterBusPanel::scanTick()
 {
 	std::string current;
 	float progress = 0.0f;
@@ -1395,7 +1462,7 @@ void MasterBusWindow::scanTick()
 	finishScan();
 }
 
-void MasterBusWindow::finishScan()
+void MasterBusPanel::finishScan()
 {
 	scanTimer_->stop();
 	scanButton_->setEnabled(true);
@@ -1409,6 +1476,20 @@ void MasterBusWindow::finishScan()
 	const std::string warning = bus::Engine::get().takeStartupWarning();
 	if (!warning.empty())
 		QMessageBox::warning(this, QStringLiteral("Master bus"), QString::fromStdString(warning));
+}
+
+// ---------------------------------------------------------------------------
+
+MasterBusWindow::MasterBusWindow(QWidget *parent) : QDialog(parent)
+{
+	setObjectName(QStringLiteral("OBSViewerDialog"));
+	setStyleSheet(theme::styleSheet());
+	setWindowTitle(QStringLiteral("OBSViewer Master Bus"));
+	resize(700, 820);
+	panel_ = new MasterBusPanel(false, this);
+	auto *layout = new QVBoxLayout(this);
+	layout->setContentsMargins(0, 0, 0, 0);
+	layout->addWidget(panel_);
 }
 
 } // namespace obsviewer
