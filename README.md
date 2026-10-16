@@ -30,8 +30,9 @@ To uninstall, quit OBS and delete
 - **Layouts:** Settings ▸ Window layout / Dock layout, or right-click ▸ Layout.
   **Dynamic** (the default) puts Preview and Program on top and every scene below,
   sized to fill the window.
-- **Switching scenes:** click a scene to send it to Preview (or cut to Program; choose
-  in Settings ▸ Clicking a view). Double-click Preview to take it to Program.
+- **Switching scenes:** off by default. Turn it on in Settings ▸ Clicking a view: a
+  click then sends a scene to Preview (or cuts it to Program). Double-click Preview to
+  take it to Program.
 - **Tally:** a red name band = on Program, green = in Preview (Studio Mode).
 - **Side bar:** health and performance lights (click for details), Start stream with
   upload, bitrate history, dropped frames and connection, Start recording with disk

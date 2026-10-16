@@ -1,5 +1,7 @@
 #pragma once
 
+#include "viewer/Renderer.hpp"
+
 #include <QWidget>
 
 #include <atomic>
@@ -50,6 +52,7 @@ private:
 	obs_display_t *display_ = nullptr;
 	std::atomic<const LayoutInfo *> layout_;
 	std::atomic<float> dpr_{1.0f};
+	RenderCache cache_; // graphics thread only
 	bool counted_ = false;
 };
 

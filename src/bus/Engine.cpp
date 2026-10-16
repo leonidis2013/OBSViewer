@@ -133,6 +133,11 @@ struct Engine::Impl {
 	juce::uint32 childStarted = 0;
 	std::string startupWarning;
 
+	uint64_t generation = 0; // bumped when the chain is cleared; stale async loads are dropped
+	uint64_t revision = 0;   // bumped on any chain or plugin-list change (for the UI)
+	bool loadingChain = false;
+	std::string pendingChain;
+
 	juce::File dir() const { return juce::File(juce::String::fromUTF8(dataDir.c_str())); }
 	juce::File listFile() const { return dir().getChildFile("plugins.xml"); }
 	juce::File resultFile() const { return dir().getChildFile("scan-result.xml"); }
@@ -378,6 +383,7 @@ bool Engine::scanStep(std::string &current, float &progress)
 
 	im.scanActive = false;
 	im.saveList();
+	++im.revision;
 	progress = 1.0f;
 	current.clear();
 	return false;
@@ -416,36 +422,72 @@ std::string Engine::takeStartupWarning()
 
 // ---------------------------------------------------------------- chain
 
-bool Engine::addPlugin(const std::string &id, std::string &error, int insertAt)
+void Engine::addPlugin(const std::string &id, int insertAt, AddDone done, const std::string &state, bool bypass,
+		       float inDb, float outDb)
 {
 	auto &im = *impl_;
 	auto desc = im.known.getTypeForIdentifierString(juce::String::fromUTF8(id.c_str()));
 	if (!desc) {
-		error = "That plugin isn't in the scanned list any more. Scan for plugins again.";
-		return false;
+		if (done)
+			done(false, "That plugin isn't in the scanned list any more. Scan for plugins again.", -1);
+		return;
 	}
-	juce::String err;
-	// If the plugin takes OBS down while it's being created, the next start
-	// finds this marker and skips the plugin (see init).
+	// If the plugin takes OBS down while it's being created, the next start finds
+	// this marker and skips the plugin (see init).
 	im.loadingFile().replaceWithText(desc->createIdentifierString());
-	auto instance = im.formats.createPluginInstance(*desc, im.sampleRate, im.maxBlock, err);
-	if (!instance) {
-		im.loadingFile().deleteFile();
-		error = err.isNotEmpty() ? err.toStdString() : std::string("The plugin couldn't be loaded.");
-		return false;
-	}
-	auto slot = std::make_shared<Slot>();
-	slot->desc = *desc;
-	im.configure(*instance, *slot);
-	slot->plugin = std::move(instance);
-	im.loadingFile().deleteFile();
+	const juce::PluginDescription description = *desc;
+	const uint64_t generation = im.generation;
 
-	std::lock_guard<std::mutex> lock(im.chainLock);
-	if (insertAt < 0 || static_cast<size_t>(insertAt) > im.chain.size())
-		im.chain.push_back(std::move(slot));
-	else
-		im.chain.insert(im.chain.begin() + insertAt, std::move(slot));
-	return true;
+	// Asynchronous creation: required for out-of-process Audio Units (AUv3), which
+	// need OBS's run loop free while they start. Others complete just the same.
+	im.formats.createPluginInstanceAsync(
+		description, im.sampleRate, im.maxBlock,
+		[this, description, generation, insertAt, done, state, bypass, inDb,
+		 outDb](std::unique_ptr<juce::AudioPluginInstance> instance, const juce::String &err) {
+			auto &im = *impl_;
+			im.loadingFile().deleteFile();
+			if (generation != im.generation) // chain cleared or replaced meanwhile
+				return;
+			if (!instance) {
+				if (done)
+					done(false,
+					     err.isNotEmpty() ? err.toStdString() : std::string("The plugin couldn't be loaded."),
+					     -1);
+				return;
+			}
+			auto slot = std::make_shared<Slot>();
+			slot->desc = description;
+			im.configure(*instance, *slot);
+			if (!state.empty()) {
+				juce::MemoryBlock block;
+				if (block.fromBase64Encoding(juce::String::fromUTF8(state.c_str())) && block.getSize() > 0) {
+					im.loadingFile().replaceWithText(description.createIdentifierString());
+					instance->setStateInformation(block.getData(), static_cast<int>(block.getSize()));
+					im.loadingFile().deleteFile();
+				}
+			}
+			slot->bypass = bypass;
+			slot->inDb = std::clamp(inDb, -24.0f, 24.0f);
+			slot->outDb = std::clamp(outDb, -24.0f, 24.0f);
+			slot->inGain = fromDb(slot->inDb);
+			slot->outGain = fromDb(slot->outDb);
+			slot->plugin = std::move(instance);
+
+			int index;
+			{
+				std::lock_guard<std::mutex> lock(im.chainLock);
+				if (insertAt < 0 || static_cast<size_t>(insertAt) > im.chain.size()) {
+					im.chain.push_back(std::move(slot));
+					index = static_cast<int>(im.chain.size()) - 1;
+				} else {
+					im.chain.insert(im.chain.begin() + insertAt, std::move(slot));
+					index = insertAt;
+				}
+			}
+			++im.revision;
+			if (done)
+				done(true, std::string(), index);
+		});
 }
 
 void Engine::removeSlot(int index)
@@ -458,6 +500,7 @@ void Engine::removeSlot(int index)
 		gone = impl_->chain[static_cast<size_t>(index)];
 		impl_->chain.erase(impl_->chain.begin() + index);
 	}
+	++impl_->revision;
 	gone.reset(); // plugin destroyed here, on the main thread
 }
 
@@ -471,12 +514,15 @@ void Engine::moveSlot(int from, int to)
 	auto s = c[static_cast<size_t>(from)];
 	c.erase(c.begin() + from);
 	c.insert(c.begin() + to, s);
+	++impl_->revision;
 }
 
 void Engine::setBypass(int index, bool bypass)
 {
-	if (auto s = impl_->at(index))
+	if (auto s = impl_->at(index)) {
 		s->bypass = bypass;
+		++impl_->revision;
+	}
 }
 
 void Engine::setSlotGains(int index, float inDb, float outDb)
@@ -584,6 +630,10 @@ double Engine::sampleRate() const
 
 void Engine::clearChain()
 {
+	++impl_->generation; // drop plugins still on their way in
+	++impl_->revision;
+	impl_->loadingChain = false;
+	impl_->pendingChain.clear();
 	std::vector<std::shared_ptr<Slot>> gone;
 	{
 		std::lock_guard<std::mutex> lock(impl_->chainLock);
@@ -594,6 +644,8 @@ void Engine::clearChain()
 
 std::string Engine::saveChain() const
 {
+	if (impl_->loadingChain)
+		return impl_->pendingChain; // never save a half-restored chain
 	juce::ValueTree root("OBSViewerMasterBus");
 	root.setProperty("version", 1, nullptr);
 	root.setProperty("masterIn", impl_->masterInDb, nullptr);
@@ -615,36 +667,90 @@ std::string Engine::saveChain() const
 	return root.toXmlString().toStdString();
 }
 
-bool Engine::loadChain(const std::string &text, std::string &errors)
+void Engine::loadChain(const std::string &text, std::function<void(const std::string &errors)> done)
 {
+	auto &im = *impl_;
 	clearChain();
-	if (text.empty())
-		return true;
+	if (text.empty()) {
+		if (done)
+			done({});
+		return;
+	}
 	const juce::ValueTree root = juce::ValueTree::fromXml(juce::String::fromUTF8(text.c_str()));
-	if (!root.isValid())
-		return false;
+	if (!root.isValid()) {
+		if (done)
+			done("The saved chain couldn't be read.");
+		return;
+	}
 	setMasterGains(static_cast<float>(root.getProperty("masterIn", 0.0)),
 		       static_cast<float>(root.getProperty("masterOut", 0.0)));
-	bool ok = true;
-	for (int i = 0; i < root.getNumChildren(); ++i) {
-		const auto v = root.getChild(i);
-		std::string error;
-		const std::string id = v.getProperty("id").toString().toStdString();
-		if (!addPlugin(id, error)) {
-			errors += v.getProperty("name").toString().toStdString() + ": " + error + "\n";
-			ok = false;
-			continue;
+
+	// While plugins arrive one by one, saving keeps the full saved chain.
+	im.loadingChain = true;
+	im.pendingChain = text;
+
+	struct Job {
+		std::vector<juce::ValueTree> slots;
+		size_t next = 0;
+		std::string errors;
+		std::function<void(const std::string &)> done;
+	};
+	auto job = std::make_shared<Job>();
+	for (int i = 0; i < root.getNumChildren(); ++i)
+		job->slots.push_back(root.getChild(i));
+	job->done = std::move(done);
+	const uint64_t generation = im.generation;
+
+	// One plugin per turn of OBS's event loop, so OBS stays responsive.
+	auto step = std::make_shared<std::function<void()>>();
+	*step = [this, job, generation, step] {
+		auto &im = *impl_;
+		if (generation != im.generation)
+			return;
+		if (job->next >= job->slots.size()) {
+			im.loadingChain = false;
+			im.pendingChain.clear();
+			if (job->done)
+				job->done(job->errors);
+			*step = nullptr; // break the self-reference
+			return;
 		}
-		const int index = slotCount() - 1;
-		if (auto s = impl_->at(index)) {
-			juce::MemoryBlock state;
-			if (state.fromBase64Encoding(v.getProperty("state").toString()) && state.getSize() > 0)
-				s->plugin->setStateInformation(state.getData(), static_cast<int>(state.getSize()));
-			s->bypass = static_cast<bool>(v.getProperty("bypass", false));
-		}
-		setSlotGains(index, static_cast<float>(v.getProperty("in", 0.0)), static_cast<float>(v.getProperty("out", 0.0)));
-	}
-	return ok;
+		const juce::ValueTree v = job->slots[job->next++];
+		addPlugin(v.getProperty("id").toString().toStdString(), -1,
+			  [job, step, v](bool ok, const std::string &error, int) {
+				  if (!ok)
+					  job->errors += v.getProperty("name").toString().toStdString() + ": " + error + "\n";
+				  juce::MessageManager::callAsync([step] {
+					  if (*step)
+						  (*step)();
+				  });
+			  },
+			  v.getProperty("state").toString().toStdString(), static_cast<bool>(v.getProperty("bypass", false)),
+			  static_cast<float>(v.getProperty("in", 0.0)), static_cast<float>(v.getProperty("out", 0.0)));
+	};
+	juce::MessageManager::callAsync([step] {
+		if (*step)
+			(*step)();
+	});
+}
+
+bool Engine::loadingChain() const
+{
+	return impl_->loadingChain;
+}
+
+uint64_t Engine::revision() const
+{
+	return impl_->revision;
+}
+
+float Engine::totalReduction() const
+{
+	float total = 0.0f;
+	for (size_t i = 0; i < impl_->chain.size(); ++i)
+		if (!impl_->chain[i]->bypass.load())
+			total += slotLevels(static_cast<int>(i)).reduction;
+	return total;
 }
 
 // ---------------------------------------------------------------- audio

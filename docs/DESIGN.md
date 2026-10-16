@@ -127,6 +127,15 @@ tests/                      host-side unit tests (layouts, versions) run in CI
   reference height (the all-caps PROGRAM title) and top-aligned: same size and
   baseline everywhere; a name only shrinks if it doesn't fit.
 - Clicks use the same placement (`placeTiles`), so a click on a label counts as the tile.
+- Performance (0.6.3): in Dynamic, scene views render into a cached texture every
+  other frame (staggered), Preview / Program every frame. Only the first N scenes a
+  visible view shows (N = the layout's scene count; all for Dynamic) are marked
+  showing; new marks are applied before old ones are removed so nothing flickers off.
+  The dock hides its display while the viewer window is open ("Show Here Too"
+  overrides for the session). Scene audio lists rebuild on scene item signals
+  (`item_add`, `item_remove`, `item_visible`, `refresh`), on scene list / Program /
+  Preview changes, and every 5 s as a safety net; between rebuilds only mute states
+  are refreshed.
 
 ### 4.2 Layout presets
 
@@ -238,13 +247,13 @@ Stored as JSON in `~/Library/Application Support/obs-studio/plugin_config/obsvie
 
 | Key | Default | Meaning |
 |---|---|---|
-| `settings_version` | `2` | Config format; < 2 moves the layouts to Dynamic once. |
+| `settings_version` | `3` | Config format; < 2 moves the layouts to Dynamic once, < 3 turns tile clicks off once. |
 | `dock_layout` | `auto` | Layout shown in the dock. |
 | `window_layout` | `auto` | Layout shown in the viewer window. |
 | `window_screen` | primary | Screen for fullscreen. |
 | `window_geometry` | — | Windowed size and position (Qt `saveGeometry`, base64). |
 | `show_labels` | `true` | Names in a band below each view. |
-| `click_action` | `1` | Tile click: 0 off, 1 to Preview, 2 to Program. |
+| `click_action` | `0` | Tile click: 0 off, 1 to Preview, 2 to Program (reset to 0 once by 0.6.3). |
 | `show_sidebar` | `true` | Right-hand side bar. |
 | `alarms` | `true` | Flash the health light on a Problem. |
 | `master_bus_embedded` | `true` | Master bus opens next to the side bar (else in its own window). |
@@ -424,13 +433,27 @@ Vertical strip (LiveProfessor / Waves style) on the left, plugin browser on the 
   tracks, plugin list, slots and bypass) on its meter tick and refreshes when another
   view changed it. Trim and fader follow unless being dragged.
 
-### 8.5 Not yet
+### 8.4c Loading, saving and sync (0.6.3)
 
-- Per-source channel strip (an OBS filter using the same host).
+- Plugins are created with `createPluginInstanceAsync` (out-of-process AUv3 need the
+  run loop free); the slot is inserted when the instance arrives. A generation
+  counter drops instances that arrive after the chain was cleared.
+- The saved chain loads 2 s after OBS finishes loading, one plugin per event-loop
+  turn. While it loads, saving writes the saved chain back unchanged, so a quit in
+  that window can't lose plugins.
+- Fader, trim and bypass changes save 0.8 s after the last change (`saveSoon`).
+- The chain latency is re-read every 0.5 s; a change re-applies the sync offset.
+- Panels detect changes from an engine revision counter plus the routing settings,
+  run their meter timer only while shown, and the mixer icon shows bus status (green
+  running, amber ≥ 1 dB reduction).
+
+### 8.5 Decided not to build
+
+- OBSViewer stays an OBS plugin (no standalone app).
+- No per-source channel strip; the master bus is the only processing.
 - Running the plugins themselves out of process.
-- Bus status and gain reduction on the multiview side bar.
-- Licensing: JUCE is AGPLv3 / commercial; fine for private use, settle before any
-  public release.
+- Licensing: JUCE is AGPLv3 / commercial; OBSViewer is for private (church) use, so
+  no licence is needed. Revisit only if it is ever shared.
 
 ## 9. Testing
 

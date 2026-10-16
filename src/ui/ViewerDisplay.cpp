@@ -48,7 +48,7 @@ ViewerDisplay::~ViewerDisplay()
 {
 	destroyDisplay();
 	if (counted_) {
-		ViewerState::get().removeView();
+		ViewerState::get().removeView(this);
 		counted_ = false;
 	}
 }
@@ -56,6 +56,8 @@ ViewerDisplay::~ViewerDisplay()
 void ViewerDisplay::setLayoutId(const std::string &id)
 {
 	layout_.store(&layoutById(id));
+	if (counted_)
+		ViewerState::get().setView(this, layout_.load()->fixedScenes);
 }
 
 std::string ViewerDisplay::layoutId() const
@@ -103,12 +105,15 @@ void ViewerDisplay::destroyDisplay()
 	obs_display_remove_draw_callback(display_, &ViewerDisplay::draw, this);
 	obs_display_destroy(display_);
 	display_ = nullptr;
+	obs_enter_graphics();
+	cache_.destroy();
+	obs_leave_graphics();
 }
 
 void ViewerDisplay::draw(void *param, uint32_t cx, uint32_t cy)
 {
 	auto *self = static_cast<ViewerDisplay *>(param);
-	Renderer::render(self->layout_.load()->id, cx, cy, self->dpr_.load());
+	Renderer::render(self->layout_.load()->id, cx, cy, self->dpr_.load(), self->cache_);
 }
 
 void ViewerDisplay::paintEvent(QPaintEvent *event)
@@ -132,7 +137,7 @@ void ViewerDisplay::showEvent(QShowEvent *event)
 {
 	QWidget::showEvent(event);
 	if (!counted_) {
-		ViewerState::get().addView();
+		ViewerState::get().setView(this, layout_.load()->fixedScenes);
 		counted_ = true;
 	}
 	createDisplay();
@@ -146,7 +151,7 @@ void ViewerDisplay::hideEvent(QHideEvent *event)
 	if (display_)
 		obs_display_set_enabled(display_, false);
 	if (counted_) {
-		ViewerState::get().removeView();
+		ViewerState::get().removeView(this);
 		counted_ = false;
 	}
 }

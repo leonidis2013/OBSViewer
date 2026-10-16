@@ -8,6 +8,8 @@
 
 #include <plugin-support.h>
 
+#include <QTimer>
+
 #include <algorithm>
 #include <cmath>
 #include <cstring>
@@ -122,9 +124,22 @@ void MasterBus::load()
 	if (!config_.outputMask)
 		config_.outputMask = config_.sendTrack == 1 ? 2 : 1;
 
-	std::string errors;
-	if (!bus::Engine::get().loadChain(chain, errors) && !errors.empty())
-		obs_log(LOG_WARNING, "master bus: some plugins could not be restored:\n%s", errors.c_str());
+	// Plugins load after OBS has finished opening, one at a time, so they don't
+	// hold up OBS's start. Until then the bus passes audio through unprocessed.
+	if (!chain.empty()) {
+		QTimer::singleShot(2000, [this, chain] {
+			if (!loaded_ || !bus::Engine::get().ready())
+				return;
+			obs_log(LOG_INFO, "master bus: restoring the plugin chain");
+			bus::Engine::get().loadChain(chain, [this](const std::string &errors) {
+				if (!errors.empty())
+					obs_log(LOG_WARNING, "master bus: some plugins could not be restored:\n%s",
+						errors.c_str());
+				obs_log(LOG_INFO, "master bus: %d plugin(s) restored", bus::Engine::get().slotCount());
+				applyOutputMixers(); // latency of the restored chain
+			});
+		});
+	}
 
 	if (config_.enabled) {
 		start();
@@ -216,10 +231,39 @@ void MasterBus::save() const
 	obs_data_release(old);
 }
 
+void MasterBus::saveSoon()
+{
+	// Controls like the fader change many times a second; write once they settle.
+	if (!saveTimer_) {
+		saveTimer_ = new QTimer();
+		saveTimer_->setSingleShot(true);
+		saveTimer_->setInterval(800);
+		QObject::connect(saveTimer_, &QTimer::timeout, [this] { save(); });
+	}
+	saveTimer_->start();
+}
+
+void MasterBus::checkLatency()
+{
+	if (!source_)
+		return;
+	const int latency = bus::Engine::get().latencySamples();
+	if (latency == lastLatency_)
+		return;
+	obs_log(LOG_INFO, "master bus: chain latency now %d samples; resyncing", latency);
+	lastLatency_ = latency;
+	applyOutputMixers();
+}
+
 void MasterBus::unload()
 {
 	if (!loaded_)
 		return;
+	if (saveTimer_) {
+		saveTimer_->stop();
+		delete saveTimer_;
+		saveTimer_ = nullptr;
+	}
 	save();
 	stop();
 	bus::Engine::get().shutdown();
@@ -285,6 +329,7 @@ void MasterBus::applyOutputMixers()
 		const int64_t latencyNs =
 			static_cast<int64_t>(static_cast<double>(bus::Engine::get().latencySamples()) / sr * 1e9);
 		obs_source_set_sync_offset(source_, -latencyNs);
+		lastLatency_ = bus::Engine::get().latencySamples();
 	}
 }
 

@@ -78,10 +78,14 @@ void Settings::load()
 
 	// 0.6.0 introduced the dynamic layout (Preview + Program on top, every scene
 	// below) and made it the default; move older configs onto it once.
-	if (obs_data_get_int(data, "settings_version") < 2) {
+	const long long version = obs_data_get_int(data, "settings_version");
+	if (version < 2) {
 		dockLayout = defaults.dockLayout;
 		windowLayout = defaults.windowLayout;
 	}
+	// 0.6.3: clicking a view does nothing unless turned on in Settings.
+	if (version < 3)
+		clickAction = defaults.clickAction;
 
 	obs_data_release(data);
 }
@@ -99,7 +103,7 @@ void Settings::save() const
 		return;
 
 	obs_data_t *data = obs_data_create();
-	obs_data_set_int(data, "settings_version", 2);
+	obs_data_set_int(data, "settings_version", 3);
 	obs_data_set_string(data, "dock_layout", dockLayout.c_str());
 	obs_data_set_string(data, "window_layout", windowLayout.c_str());
 	obs_data_set_string(data, "window_screen", windowScreen.c_str());

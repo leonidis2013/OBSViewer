@@ -2,13 +2,18 @@
 
 #include "core/Settings.hpp"
 #include "App.hpp"
+#include "bus/Engine.hpp"
+#include "bus/MasterBus.hpp"
 #include "ui/MasterBusWindow.hpp"
 #include "ui/Paint.hpp"
 #include "ui/SidePanel.hpp"
 #include "ui/ViewerDisplay.hpp"
 
 #include <QGridLayout>
+#include <QLabel>
 #include <QPainter>
+#include <QPushButton>
+#include <QVBoxLayout>
 #include <QPointer>
 #include <QTimer>
 
@@ -21,12 +26,29 @@ MultiviewPanel::MultiviewPanel(bool compact, QWidget *parent) : QWidget(parent)
 	side_->setCompact(compact);
 
 	QPointer<MultiviewPanel> self(this);
-	side_->addHeaderButton(IconButton::Icon::Mixer, QStringLiteral("Master bus"), [self] {
+	busButton_ = side_->addHeaderButton(IconButton::Icon::Mixer, QStringLiteral("Master bus"), [self] {
 		QTimer::singleShot(0, self, [self] {
 			if (self)
 				self->masterBusButton();
 		});
 	});
+	// Bus status on the icon: green dot = running, amber = reducing ≥ 1 dB.
+	auto *busStatus = new QTimer(this);
+	busStatus->setInterval(250);
+	connect(busStatus, &QTimer::timeout, this, [this] {
+		if (!isVisible() || !busButton_)
+			return;
+		const MasterBus &bus = MasterBus::get();
+		const float gr = bus.running() ? bus::Engine::get().totalReduction() : 0.0f;
+		busButton_->setBadge(!bus.running() ? 0u : gr >= 1.0f ? theme::kAccentAmber : theme::kGood);
+		const QString tip = !bus.enabled()   ? QStringLiteral("Master bus · off")
+				    : !bus.running() ? QStringLiteral("Master bus · on, not running (see the OBS log)")
+				    : gr >= 0.1f     ? QStringLiteral("Master bus · on · reducing %1 dB").arg(gr, 0, 'f', 1)
+						     : QStringLiteral("Master bus · on");
+		if (busButton_->toolTip() != tip)
+			busButton_->setToolTip(tip);
+	});
+	busStatus->start();
 
 	auto *grid = new QGridLayout(this);
 	grid_ = grid;
@@ -49,6 +71,31 @@ void MultiviewPanel::setLayoutId(const std::string &id)
 std::string MultiviewPanel::layoutId() const
 {
 	return display_->layoutId();
+}
+
+void MultiviewPanel::setPaused(bool paused)
+{
+	if (paused && !pausedNote_) {
+		pausedNote_ = new QWidget(this);
+		auto *l = new QVBoxLayout(pausedNote_);
+		l->addStretch(1);
+		auto *text = new QLabel(QStringLiteral("The multiview is showing in the OBSViewer window."), pausedNote_);
+		text->setAlignment(Qt::AlignCenter);
+		text->setWordWrap(true);
+		text->setProperty("dim", true);
+		auto *button = new QPushButton(QStringLiteral("Show Here Too"), pausedNote_);
+		button->setToolTip(QStringLiteral("Draw it in the dock as well (uses more graphics power)"));
+		connect(button, &QPushButton::clicked, this, [] {
+			QTimer::singleShot(0, &App::get(), [] { App::get().showDockAnyway(); });
+		});
+		l->addWidget(text);
+		l->addWidget(button, 0, Qt::AlignHCenter);
+		l->addStretch(1);
+		grid_->addWidget(pausedNote_, 0, 0);
+	}
+	if (pausedNote_)
+		pausedNote_->setVisible(paused);
+	display_->setVisible(!paused); // hiding the display stops its drawing
 }
 
 void MultiviewPanel::masterBusButton()

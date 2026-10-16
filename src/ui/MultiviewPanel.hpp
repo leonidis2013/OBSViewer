@@ -8,6 +8,7 @@ class QGridLayout;
 
 namespace obsviewer {
 
+class IconButton;
 class MasterBusPanel;
 class SidePanel;
 class ViewerDisplay;
@@ -32,6 +33,10 @@ public:
 	// Header button: embedded strip on / off, or the master bus window.
 	void masterBusButton();
 
+	// The dock pauses its multiview while the viewer window is open (no point
+	// drawing every scene twice); a placeholder says where it went.
+	void setPaused(bool paused);
+
 protected:
 	void paintEvent(QPaintEvent *event) override;
 
@@ -39,6 +44,8 @@ private:
 	ViewerDisplay *display_ = nullptr;
 	SidePanel *side_ = nullptr;
 	MasterBusPanel *bus_ = nullptr;
+	IconButton *busButton_ = nullptr;
+	QWidget *pausedNote_ = nullptr;
 	QGridLayout *grid_ = nullptr;
 };
 

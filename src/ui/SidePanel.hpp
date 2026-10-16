@@ -27,6 +27,8 @@ public:
 
 	IconButton(Icon icon, const QString &tip, QWidget *parent = nullptr);
 	void setIcon(Icon icon);
+	// Small status dot in the top-right corner (ARGB); 0 = none.
+	void setBadge(uint32_t color);
 
 protected:
 	void paintEvent(QPaintEvent *event) override;
@@ -35,6 +37,7 @@ protected:
 
 private:
 	Icon icon_;
+	uint32_t badge_ = 0;
 };
 
 // Right-hand bar, top to bottom: header icons, overall health and performance

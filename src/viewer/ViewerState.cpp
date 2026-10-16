@@ -136,9 +136,31 @@ obs_source_t *ViewerState::createLabel(const std::string &text, uint32_t canvasH
 	return label;
 }
 
-void ViewerState::applyShowing(bool showing)
+int ViewerState::wantedShownCount() const
 {
-	// Undo previous marks first; then (re)apply to the current scene list.
+	int count = 0;
+	for (const auto &kv : views_) {
+		if (kv.second < 0)
+			return static_cast<int>(sceneWeak_.size());
+		count = std::max(count, kv.second);
+	}
+	return std::min(count, static_cast<int>(sceneWeak_.size()));
+}
+
+void ViewerState::applyShowing(int count)
+{
+	// Mark the new set first, then unmark the old one, so a scene that stays on
+	// screen never drops to "not showing" for a moment (that would restart media
+	// sources set to restart when shown).
+	std::vector<obs_weak_source_t *> next;
+	for (int i = 0; i < count && static_cast<size_t>(i) < sceneWeak_.size(); ++i) {
+		obs_source_t *source = obs_weak_source_get_source(sceneWeak_[static_cast<size_t>(i)]);
+		if (!source)
+			continue;
+		obs_source_inc_showing(source);
+		next.push_back(obs_source_get_weak_source(source));
+		obs_source_release(source);
+	}
 	for (obs_weak_source_t *weak : shown_) {
 		obs_source_t *source = obs_weak_source_get_source(weak);
 		if (source) {
@@ -147,20 +169,8 @@ void ViewerState::applyShowing(bool showing)
 		}
 		obs_weak_source_release(weak);
 	}
-	shown_.clear();
-
-	showing_ = showing;
-	if (!showing)
-		return;
-
-	for (obs_weak_source_t *weak : sceneWeak_) {
-		obs_source_t *source = obs_weak_source_get_source(weak);
-		if (!source)
-			continue;
-		obs_source_inc_showing(source);
-		shown_.push_back(obs_source_get_weak_source(source));
-		obs_source_release(source);
-	}
+	shown_ = std::move(next);
+	shownCount_ = count;
 }
 
 void ViewerState::refresh()
@@ -227,9 +237,20 @@ void ViewerState::refresh()
 
 	// Per-scene audio for the tile meters (volume meters are created / destroyed
 	// here, never under the lock).
+	// Rebuilt only when something changed: the scene list, Program / Preview, a
+	// scene's items (signals set audioDirty_), or every 5 s as a safety net for
+	// changes inside groups. Otherwise only mute states are refreshed.
 	std::vector<AudioList> newSceneAudio;
 	AudioList newPreviewAudio;
-	if (showTileMeters_) {
+	const bool safetyRebuild = ++pollsSinceAudio_ >= 10;
+	const bool rebuildAudio = listChanged || namesChanged || heightChanged || safetyRebuild ||
+				  audioDirty_.exchange(false);
+	if (rebuildAudio)
+		pollsSinceAudio_ = 0;
+	if (!rebuildAudio) {
+		if (showTileMeters_)
+			SourceLevels::get().refreshMuted();
+	} else if (showTileMeters_) {
 		SourceLevels::get().beginSync();
 		newSceneAudio.reserve(list.sources.num);
 		for (size_t i = 0; i < list.sources.num; ++i) {
@@ -265,8 +286,10 @@ void ViewerState::refresh()
 		recording_ = recording;
 		recordingPaused_ = paused;
 
-		std::swap(sceneAudio_, newSceneAudio);
-		std::swap(previewAudio_, newPreviewAudio);
+		if (rebuildAudio) {
+			std::swap(sceneAudio_, newSceneAudio);
+			std::swap(previewAudio_, newPreviewAudio);
+		}
 
 		oldWeak.push_back(program_);
 		oldWeak.push_back(preview_);
@@ -309,24 +332,30 @@ void ViewerState::refresh()
 	releaseAll(oldSources);
 	releaseAll(oldWeak);
 
-	if (listChanged && showing_)
-		applyShowing(true);
+	if (listChanged) {
+		applyShowing(wantedShownCount());
+		watchScenes();
+	}
 
 	obs_source_release(program);
 	obs_source_release(preview);
 	obs_frontend_source_list_free(&list);
 }
 
-void ViewerState::addView()
+void ViewerState::setView(const void *view, int sceneLimit)
 {
-	if (++views_ == 1)
-		applyShowing(true);
+	views_[view] = sceneLimit;
+	const int wanted = wantedShownCount();
+	if (wanted != shownCount_)
+		applyShowing(wanted);
 }
 
-void ViewerState::removeView()
+void ViewerState::removeView(const void *view)
 {
-	if (views_ > 0 && --views_ == 0)
-		applyShowing(false);
+	views_.erase(view);
+	const int wanted = wantedShownCount();
+	if (wanted != shownCount_)
+		applyShowing(wanted);
 }
 
 std::string ViewerState::sceneName(int index) const
@@ -344,8 +373,47 @@ obs_source_t *ViewerState::sceneAt(int index) const
 
 void ViewerState::setShowTileMeters(bool show)
 {
-	std::lock_guard<std::mutex> lock(mutex_);
-	showTileMeters_ = show;
+	{
+		std::lock_guard<std::mutex> lock(mutex_);
+		showTileMeters_ = show;
+	}
+	audioDirty_ = true;
+}
+
+void ViewerState::onSceneItemsChanged(void *param, calldata_t *)
+{
+	// Any thread. The next poll rebuilds the audio lists.
+	static_cast<ViewerState *>(param)->audioDirty_ = true;
+}
+
+void ViewerState::unwatchScenes()
+{
+	for (obs_weak_source_t *weak : watched_) {
+		// A scene that's already gone took its signals with it.
+		if (obs_source_t *src = obs_weak_source_get_source(weak)) {
+			signal_handler_t *sh = obs_source_get_signal_handler(src);
+			for (const char *sig : {"item_add", "item_remove", "item_visible", "refresh"})
+				signal_handler_disconnect(sh, sig, &ViewerState::onSceneItemsChanged, this);
+			obs_source_release(src);
+		}
+		obs_weak_source_release(weak);
+	}
+	watched_.clear();
+}
+
+void ViewerState::watchScenes()
+{
+	unwatchScenes();
+	for (obs_weak_source_t *weak : sceneWeak_) {
+		obs_source_t *src = obs_weak_source_get_source(weak);
+		if (!src)
+			continue;
+		signal_handler_t *sh = obs_source_get_signal_handler(src);
+		for (const char *sig : {"item_add", "item_remove", "item_visible", "refresh"})
+			signal_handler_connect(sh, sig, &ViewerState::onSceneItemsChanged, this);
+		watched_.push_back(obs_source_get_weak_source(src));
+		obs_source_release(src);
+	}
 }
 
 void ViewerState::setShowLabels(bool show)
@@ -356,7 +424,9 @@ void ViewerState::setShowLabels(bool show)
 
 void ViewerState::clear()
 {
-	applyShowing(false);
+	applyShowing(0);
+	unwatchScenes();
+	audioDirty_ = true;
 
 	std::vector<obs_source_t *> oldSources;
 	std::vector<obs_weak_source_t *> oldWeak;

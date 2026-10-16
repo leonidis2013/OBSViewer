@@ -37,6 +37,10 @@ public:
 	std::function<void()> onHide;
 	std::function<void()> onDockIn;
 
+protected:
+	void showEvent(QShowEvent *event) override;
+	void hideEvent(QHideEvent *event) override;
+
 private:
 	std::string signature();
 	void refreshAll();

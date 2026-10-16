@@ -16,6 +16,8 @@
 #include <QDrag>
 #include <QDragEnterEvent>
 #include <QDropEvent>
+#include <QHideEvent>
+#include <QShowEvent>
 #include <QFrame>
 #include <QHBoxLayout>
 #include <QHeaderView>
@@ -1067,11 +1069,11 @@ MasterBusPanel::MasterBusPanel(bool embedded, QWidget *parent) : QWidget(parent)
 	connect(inputs_, &QAbstractButton::clicked, this, [this] { QTimer::singleShot(0, this, [this] { showInputs(); }); });
 	trim_->onChange = [](float db) {
 		bus::Engine::get().setMasterGains(db, bus::Engine::get().masterOutDb());
-		MasterBus::get().save();
+		MasterBus::get().saveSoon();
 	};
 	fader_->onChange = [](float db) {
 		bus::Engine::get().setMasterGains(bus::Engine::get().masterInDb(), db);
-		MasterBus::get().save();
+		MasterBus::get().saveSoon();
 	};
 	connect(search_, &QLineEdit::textChanged, this, [this] { refreshBrowser(); });
 	connect(tree_, &QTreeWidget::itemDoubleClicked, this, [this](QTreeWidgetItem *item) {
@@ -1086,16 +1088,14 @@ MasterBusPanel::MasterBusPanel(bool embedded, QWidget *parent) : QWidget(parent)
 	meterTimer_->setInterval(40);
 	connect(meterTimer_, &QTimer::timeout, this, [this] {
 		bus::Engine &engine = bus::Engine::get();
-		float total = 0.0f;
-		for (size_t i = 0; i < slots_.size(); ++i) {
+		const int count = engine.slotCount();
+		for (size_t i = 0; i < slots_.size() && static_cast<int>(i) < count; ++i) {
 			if (!slots_[i]->filled())
 				continue;
 			const bus::Levels l = engine.slotLevels(static_cast<int>(i));
-			const bool bypass = engine.slot(static_cast<int>(i)).bypass;
-			if (!bypass)
-				total += l.reduction;
 			slots_[i]->setMeter(l.reduction, std::max(l.post[0], l.post[1]));
 		}
+		const float total = engine.totalReduction();
 		const bus::Levels m = engine.masterLevels();
 		fader_->setLevels(m.post[0], m.post[1], total);
 
@@ -1107,7 +1107,7 @@ MasterBusPanel::MasterBusPanel(bool embedded, QWidget *parent) : QWidget(parent)
 		if (!trim_->dragging())
 			trim_->setValue(engine.masterInDb());
 	});
-	meterTimer_->start();
+	// Started in showEvent, stopped in hideEvent.
 
 	scanTimer_ = new QTimer(this);
 	scanTimer_->setInterval(30);
@@ -1132,16 +1132,25 @@ MasterBusPanel::MasterBusPanel(bool embedded, QWidget *parent) : QWidget(parent)
 
 std::string MasterBusPanel::signature()
 {
-	bus::Engine &engine = bus::Engine::get();
+	// Cheap: a counter the engine bumps on every chain / plugin-list change, plus
+	// the routing settings. Checked on every meter tick.
 	const MasterBus &bus = MasterBus::get();
-	std::string sig = std::to_string(bus.enabled()) + "|" + std::to_string(bus.routedCount()) + "|" +
-			  std::to_string(bus.config().sendTrack) + "|" + std::to_string(bus.config().outputMask) + "|" +
-			  std::to_string(engine.plugins().size());
-	for (int i = 0; i < engine.slotCount(); ++i) {
-		const bus::SlotInfo info = engine.slot(i);
-		sig += "|" + info.name + (info.bypass ? "-" : "+");
-	}
-	return sig;
+	return std::to_string(bus::Engine::get().revision()) + "|" + std::to_string(bus.enabled()) + "|" +
+	       std::to_string(bus.running()) + "|" + std::to_string(bus.routedCount()) + "|" +
+	       std::to_string(bus.config().sendTrack) + "|" + std::to_string(bus.config().outputMask);
+}
+
+void MasterBusPanel::showEvent(QShowEvent *event)
+{
+	QWidget::showEvent(event);
+	refreshAll();
+	meterTimer_->start();
+}
+
+void MasterBusPanel::hideEvent(QHideEvent *event)
+{
+	QWidget::hideEvent(event);
+	meterTimer_->stop(); // a hidden strip costs nothing
 }
 
 void MasterBusPanel::refreshAll()
@@ -1175,7 +1184,7 @@ void MasterBusPanel::refreshSlots()
 	cb.toggleBypass = [self](int i) {
 		bus::Engine &engine = bus::Engine::get();
 		engine.setBypass(i, !engine.slot(i).bypass);
-		MasterBus::get().save();
+		MasterBus::get().saveSoon();
 		if (self)
 			self->refreshSlots();
 	};
@@ -1317,36 +1326,49 @@ void MasterBusPanel::insertFromBrowser()
 
 void MasterBusPanel::insertPlugin(const std::string &id, int index)
 {
-	std::string error;
 	scanStatus_->setText(QStringLiteral("Loading plugin…"));
 	const int count = bus::Engine::get().slotCount();
 	index = std::clamp(index, 0, count);
-	if (!bus::Engine::get().addPlugin(id, error, index)) {
-		scanStatus_->clear();
-		QMessageBox::warning(this, QStringLiteral("Insert plugin"),
-				     QStringLiteral("The plugin couldn't be loaded.\n\n%1").arg(QString::fromStdString(error)));
-		return;
-	}
-	scanStatus_->clear();
-	MasterBus::get().chainChanged();
-	selected_ = index;
-	refreshSlots();
-	bus::Engine::get().openEditor(index);
+	QPointer<MasterBusPanel> self(this);
+	bus::Engine::get().addPlugin(id, index, [self](bool ok, const std::string &error, int at) {
+		if (!ok) {
+			if (self) {
+				self->scanStatus_->clear();
+				QMessageBox::warning(self, QStringLiteral("Insert plugin"),
+						     QStringLiteral("The plugin couldn't be loaded.\n\n%1")
+							     .arg(QString::fromStdString(error)));
+			}
+			return;
+		}
+		MasterBus::get().chainChanged();
+		if (self) {
+			self->scanStatus_->clear();
+			self->selected_ = at;
+			self->refreshSlots();
+		}
+		bus::Engine::get().openEditor(at);
+	});
 }
 
 void MasterBusPanel::replacePlugin(const std::string &id, int index)
 {
-	std::string error;
-	if (!bus::Engine::get().addPlugin(id, error, index)) {
-		QMessageBox::warning(this, QStringLiteral("Replace plugin"),
-				     QStringLiteral("The plugin couldn't be loaded.\n\n%1").arg(QString::fromStdString(error)));
-		return;
-	}
-	bus::Engine::get().removeSlot(index + 1);
-	MasterBus::get().chainChanged();
-	selected_ = index;
-	refreshSlots();
-	bus::Engine::get().openEditor(index);
+	QPointer<MasterBusPanel> self(this);
+	bus::Engine::get().addPlugin(id, index, [self](bool ok, const std::string &error, int at) {
+		if (!ok) {
+			if (self)
+				QMessageBox::warning(self, QStringLiteral("Replace plugin"),
+						     QStringLiteral("The plugin couldn't be loaded.\n\n%1")
+							     .arg(QString::fromStdString(error)));
+			return;
+		}
+		bus::Engine::get().removeSlot(at + 1); // the one it replaces
+		MasterBus::get().chainChanged();
+		if (self) {
+			self->selected_ = at;
+			self->refreshSlots();
+		}
+		bus::Engine::get().openEditor(at);
+	});
 }
 
 void MasterBusPanel::showInsertMenu(int index, const QPoint &globalPos)
@@ -1374,7 +1396,7 @@ void MasterBusPanel::showSlotMenu(int index, const QPoint &globalPos)
 	connect(menu.addAction(info.bypass ? QStringLiteral("Turn On") : QStringLiteral("Bypass")), &QAction::triggered, this,
 		later([this, index, bypass = info.bypass] {
 			bus::Engine::get().setBypass(index, !bypass);
-			MasterBus::get().save();
+			MasterBus::get().saveSoon();
 			refreshSlots();
 		}));
 	QMenu *replace = menu.addMenu(QStringLiteral("Replace With"));

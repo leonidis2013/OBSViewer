@@ -2,6 +2,8 @@
 
 #include <obs.h>
 
+#include <map>
+#include <atomic>
 #include <memory>
 
 #include <mutex>
@@ -60,8 +62,11 @@ public:
 	void poll() { refresh(); }
 	// A view (dock or window) became visible / hidden. Scenes are marked as
 	// "showing" while at least one view is visible, like OBS's own Multiview.
-	void addView();
-	void removeView();
+	// A view (dock or window) is visible showing `sceneLimit` scene tiles (-1 =
+	// every scene). Only scenes some visible view actually shows are marked
+	// "showing" (so their sources run), like OBS's own Multiview.
+	void setView(const void *view, int sceneLimit);
+	void removeView(const void *view);
 	void setShowLabels(bool show);
 	void setShowTileMeters(bool show);
 
@@ -91,7 +96,11 @@ private:
 		obs_source_t *label = nullptr;
 	};
 
-	void applyShowing(bool showing); // main thread, unlocked
+	void applyShowing(int count); // main thread, unlocked; marks the first `count` scenes
+	int wantedShownCount() const;
+	void watchScenes();
+	void unwatchScenes();
+	static void onSceneItemsChanged(void *param, calldata_t *data);
 	static obs_source_t *createLabel(const std::string &text, uint32_t canvasHeight, float scale);
 
 	// ---- shared with the graphics thread (guarded by mutex_) ----
@@ -119,8 +128,11 @@ private:
 	bool haveProgramNames_ = false;
 	uint32_t labelHeight_ = 0; // canvas height the labels were built for
 	uint32_t baseWidthMain_ = 1920;
-	int views_ = 0;
-	bool showing_ = false;
+	std::map<const void *, int> views_;
+	int shownCount_ = 0; // scenes currently marked showing (first N in the list)
+	std::vector<obs_weak_source_t *> watched_; // scenes whose item signals we listen to
+	std::atomic<bool> audioDirty_{true};
+	int pollsSinceAudio_ = 0;
 	std::vector<obs_weak_source_t *> shown_; // scenes we called inc_showing on
 };
 

@@ -10,6 +10,7 @@
 
 #include <obs.h>
 #include <graphics/graphics.h>
+#include <graphics/vec4.h>
 #include <util/platform.h>
 
 #include <algorithm>
@@ -259,7 +260,69 @@ void drawTileMeter(const levels::TileLevels &t, const Rect &pic, float px, float
 
 } // namespace
 
-void Renderer::render(const std::string &layoutId, uint32_t cx, uint32_t cy, float dpr)
+void RenderCache::destroy()
+{
+	for (auto &e : scenes)
+		if (e.tex)
+			gs_texrender_destroy(e.tex);
+	scenes.clear();
+}
+
+namespace {
+
+// Scene views in the Dynamic layout redraw every other frame (half the views on
+// even frames, half on odd), and show the cached picture in between. Preview and
+// Program always redraw.
+void renderSceneHalfRate(RenderCache &cache, int sceneIndex, obs_source_t *source, const Rect &pic, float dpr,
+			 float fw, float fh)
+{
+	if (sceneIndex < 0)
+		return;
+	if (cache.scenes.size() <= static_cast<size_t>(sceneIndex))
+		cache.scenes.resize(static_cast<size_t>(sceneIndex) + 1);
+	RenderCache::Entry &e = cache.scenes[static_cast<size_t>(sceneIndex)];
+	const uint32_t w = static_cast<uint32_t>(std::max(1L, std::lround(pic.w * dpr)));
+	const uint32_t h = static_cast<uint32_t>(std::max(1L, std::lround(pic.h * dpr)));
+	if (!e.tex)
+		e.tex = gs_texrender_create(GS_RGBA, GS_ZS_NONE);
+	if (!e.tex)
+		return;
+
+	const bool due = ((cache.frame + static_cast<uint64_t>(sceneIndex)) & 1u) == 0;
+	if (!e.valid || e.cx != w || e.cy != h || due) {
+		gs_texrender_reset(e.tex);
+		if (gs_texrender_begin(e.tex, w, h)) {
+			vec4 clear;
+			vec4_zero(&clear);
+			gs_clear(GS_CLEAR_COLOR, &clear, 0.0f, 0);
+			gs_ortho(0.0f, fw, 0.0f, fh, -100.0f, 100.0f);
+			gs_blend_state_push();
+			gs_blend_function(GS_BLEND_ONE, GS_BLEND_INVSRCALPHA);
+			obs_source_video_render(source);
+			gs_blend_state_pop();
+			gs_texrender_end(e.tex);
+			e.cx = w;
+			e.cy = h;
+			e.valid = true;
+		}
+	}
+
+	gs_texture_t *tex = gs_texrender_get_texture(e.tex);
+	if (!tex || !e.valid)
+		return;
+	gs_effect_t *effect = obs_get_base_effect(OBS_EFFECT_DEFAULT);
+	gs_effect_set_texture(gs_effect_get_param_by_name(effect, "image"), tex);
+	gs_matrix_push();
+	gs_matrix_translate3f(pic.x, pic.y, 0.0f);
+	gs_matrix_scale3f(pic.w / static_cast<float>(e.cx), pic.h / static_cast<float>(e.cy), 1.0f);
+	while (gs_effect_loop(effect, "Draw"))
+		gs_draw_sprite(tex, 0, e.cx, e.cy);
+	gs_matrix_pop();
+}
+
+} // namespace
+
+void Renderer::render(const std::string &layoutId, uint32_t cx, uint32_t cy, float dpr, RenderCache &cache)
 {
 	if (cx == 0 || cy == 0)
 		return;
@@ -281,6 +344,8 @@ void Renderer::render(const std::string &layoutId, uint32_t cx, uint32_t cy, flo
 	params.gap = 4.0f;
 	params.sceneCount = static_cast<int>(snap.scenes.size());
 	const std::vector<PlacedTile> tiles = placeTiles(layoutId, params);
+	const bool halfRate = layoutById(layoutId).id == kAutoLayoutId;
+	++cache.frame;
 
 	Frame f;
 	f.fw = static_cast<float>(snap.baseWidth);
@@ -346,6 +411,8 @@ void Renderer::render(const std::string &layoutId, uint32_t cx, uint32_t cy, flo
 		drawBox(pic.x, pic.y, pic.w, pic.h, (source || isProgram) ? theme::kBlack : theme::kPanel);
 		if (isProgram)
 			renderScaled(f, pic, [] { obs_render_main_texture(); });
+		else if (source && halfRate && tile.kind == TileKind::Scene)
+			renderSceneHalfRate(cache, tile.sceneIndex, source, pic, dpr, f.fw, f.fh);
 		else if (source)
 			renderScaled(f, pic, [source] { obs_source_video_render(source); });
 

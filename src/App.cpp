@@ -59,7 +59,10 @@ void App::init()
 
 	pollTimer_ = new QTimer(this);
 	pollTimer_->setInterval(kPollIntervalMs);
-	connect(pollTimer_, &QTimer::timeout, this, [] { ViewerState::get().poll(); });
+	connect(pollTimer_, &QTimer::timeout, this, [] {
+		ViewerState::get().poll();
+		MasterBus::get().checkLatency();
+	});
 
 	obs_frontend_add_event_callback(&App::onFrontendEvent, this);
 }
@@ -195,13 +198,32 @@ ViewerWindow *App::ensureViewer()
 	if (!viewer_) {
 		viewer_ = new ViewerWindow();
 		viewer_->setAttribute(Qt::WA_DeleteOnClose);
+		connect(viewer_, &QObject::destroyed, this,
+			[this] { QTimer::singleShot(0, this, [this] { updateDockPause(); }); });
 	}
 	return viewer_;
+}
+
+void App::updateDockPause()
+{
+	if (!dock_)
+		return;
+	const bool viewerShowing = viewer_ && viewer_->isVisible();
+	if (!viewerShowing)
+		dockAnyway_ = false;
+	dock_->panel()->setPaused(viewerShowing && !dockAnyway_);
+}
+
+void App::showDockAnyway()
+{
+	dockAnyway_ = true;
+	updateDockPause();
 }
 
 void App::openWindowed()
 {
 	ensureViewer()->showWindowed();
+	updateDockPause();
 }
 
 void App::openFullscreen(QScreen *screen)
@@ -233,6 +255,7 @@ void App::openFullscreen(QScreen *screen)
 		viewer_ = nullptr;
 	}
 	ensureViewer()->showFullscreenOn(screen);
+	updateDockPause();
 
 	// Report what macOS actually did, so a log shows whether fullscreen took effect.
 	QPointer<ViewerWindow> window = viewer_;

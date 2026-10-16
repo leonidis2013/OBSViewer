@@ -38,6 +38,8 @@ public:
 	void toggleViewerMode();
 	void closeViewer();
 	bool viewerOpen() const;
+	// Dock placeholder's "Show Here Too": draw in the dock as well, this session.
+	void showDockAnyway();
 	// Name of the screen the viewer is fullscreen on; empty when it isn't fullscreen.
 	std::string fullscreenScreenName() const;
 	// parent: the window asking (so the dialog opens on top of fullscreen), or null for OBS.
@@ -65,6 +67,9 @@ private:
 	ViewerWindow *ensureViewer();
 	// Where an embedded master bus goes for a request from `from`.
 	MultiviewPanel *masterBusHost(QWidget *from);
+	// Pauses the dock's multiview while the viewer window is open.
+	void updateDockPause();
+	bool dockAnyway_ = false;
 
 	QPointer<ViewerDock> dock_;
 	QPointer<ViewerWindow> viewer_;

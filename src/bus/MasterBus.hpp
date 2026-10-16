@@ -2,6 +2,8 @@
 
 #include <obs.h>
 
+class QTimer;
+
 #include <atomic>
 #include <cstdint>
 #include <map>
@@ -54,6 +56,11 @@ public:
 
 	// Save the plugin chain and routing memory now.
 	void save() const;
+	// Save shortly, once changes stop (fader moves, knob turns).
+	void saveSoon();
+	// Re-sync the bus if the chain's latency changed (plugins can change it on
+	// their own, e.g. a limiter's lookahead). Called twice a second.
+	void checkLatency();
 	// After adding / removing / reordering plugins: update latency sync and save.
 	void chainChanged();
 	// Scene collection switching (routing memory is per collection).
@@ -77,6 +84,8 @@ private:
 	uint32_t sampleRate_ = 48000;
 	std::vector<float> left_, right_;
 	bool loaded_ = false;
+	QTimer *saveTimer_ = nullptr;
+	int lastLatency_ = -1;
 };
 
 } // namespace obsviewer

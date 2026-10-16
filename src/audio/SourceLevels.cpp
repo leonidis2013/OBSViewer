@@ -109,6 +109,16 @@ void SourceLevels::endSync()
 	}
 }
 
+void SourceLevels::refreshMuted()
+{
+	for (auto &kv : meters_) {
+		if (obs_source_t *src = obs_weak_source_get_source(kv.first)) {
+			kv.second.entry->muted.store(obs_source_muted(src), std::memory_order_relaxed);
+			obs_source_release(src);
+		}
+	}
+}
+
 void SourceLevels::clear()
 {
 	for (auto &kv : meters_) {

@@ -44,6 +44,8 @@ public:
 	// Destroys meters for sources not touched since beginSync().
 	void endSync();
 	void clear();
+	// Re-reads mute state for every metered source (cheap; between rebuilds).
+	void refreshMuted();
 
 private:
 	SourceLevels() = default;

@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.6.3] — 2026-10-16
+
+Fixes and speed-ups from the code review.
+
+- **Fixed: newer Audio Units load.** App Store-style Audio Units that run in their own process (AUv3) failed with "cannot be instantiated synchronously". Plugins now load without blocking OBS, so these work too.
+- **Fixed: the bus stays in sync when a plugin changes its own delay** (for example a limiter's lookahead). OBSViewer re-checks the chain's latency twice a second and re-syncs.
+- **Faster OBS start:** the saved master bus chain loads after OBS has opened, one plugin at a time. For the first few seconds the bus passes audio through unprocessed.
+- **Lighter master bus:** the fader, trim and bypass save once you stop changing them instead of dozens of times a second. A hidden master bus panel does no work, and open panels no longer re-sort the whole plugin list 25 times a second.
+- **Bus status on the mixer icon:** a green dot while the bus runs, amber while the chain is reducing 1 dB or more; hover for the amount.
+- **The dock rests while the viewer window is open**, so the graphics card doesn't draw every scene twice. "Show Here Too" in the dock draws it there anyway.
+- **Only scenes on screen keep running.** Layouts that show 4 or 8 scenes no longer keep every scene's sources active.
+- **Dynamic layout: small scene views redraw at half rate** (Preview and Program stay at full rate), halving the work for big scene collections.
+- **Lighter background checks:** scene audio lists are rebuilt when scenes actually change instead of every half second.
+- **Clicking a view does nothing by default** (as originally chosen). Turn on Send to Preview or Cut to Program in Settings ▸ Clicking a view; existing setups switch to "Does nothing" once.
+
+
 ## [0.6.2] — 2026-10-10
 
 - **Master bus in the viewer:** a new mixer icon at the top of the side bar opens the master bus strip right next to the side bar, in the dock or the viewer window. Its pop-out icon moves it to its own window (with the plugin browser); in the window, the dock-in icon puts it back beside the side bar. Your choice is remembered (also in Settings).

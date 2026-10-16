@@ -1,5 +1,7 @@
 #pragma once
 
+#include <cstdint>
+#include <functional>
 #include <memory>
 #include <string>
 #include <vector>
@@ -60,7 +62,12 @@ public:
 	std::string takeStartupWarning();
 
 	// ---- chain (main thread) ----
-	bool addPlugin(const std::string &id, std::string &error, int insertAt = -1);
+	// Loads a plugin and inserts it at insertAt (-1 = end). Asynchronous (out-of-
+	// process Audio Units need that); `done` runs on the main thread with the slot
+	// index. state / bypass / gains restore a saved slot.
+	using AddDone = std::function<void(bool ok, const std::string &error, int index)>;
+	void addPlugin(const std::string &id, int insertAt, AddDone done, const std::string &state = {},
+		       bool bypass = false, float inDb = 0.0f, float outDb = 0.0f);
 	void removeSlot(int index);
 	void moveSlot(int from, int to);
 	void setBypass(int index, bool bypass);
@@ -78,7 +85,13 @@ public:
 	void clearChain();
 	// Whole chain (plugins, their settings, gains) as text, and back.
 	std::string saveChain() const;
-	bool loadChain(const std::string &state, std::string &errors);
+	// Restores a saved chain one plugin per event-loop turn; `done` gets any errors.
+	void loadChain(const std::string &state, std::function<void(const std::string &errors)> done);
+	bool loadingChain() const;
+	// Changes whenever the chain or the plugin list changes (cheap UI change check).
+	uint64_t revision() const;
+	// Gain reduction of all active slots added up, dB.
+	float totalReduction() const;
 
 	// ---- audio (OBS audio thread) ----
 	void prepare(double sampleRate, int maxBlock); // main thread

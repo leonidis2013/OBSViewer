@@ -43,6 +43,14 @@ void IconButton::setIcon(Icon icon)
 	update();
 }
 
+void IconButton::setBadge(uint32_t color)
+{
+	if (color == badge_)
+		return;
+	badge_ = color;
+	update();
+}
+
 void IconButton::enterEvent(QEnterEvent *e)
 {
 	QAbstractButton::enterEvent(e);
@@ -143,6 +151,11 @@ void IconButton::paintEvent(QPaintEvent *)
 		p.drawLine(tip, tip + QPointF(0, u * 0.6));
 		break;
 	}
+	}
+	if (badge_) {
+		p.setPen(QPen(col(theme::kBg), 1.5));
+		p.setBrush(col(badge_));
+		p.drawEllipse(QRectF(r.right() - 7.5, r.top() + 1.5, 6, 6));
 	}
 }
 

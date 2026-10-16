@@ -13,7 +13,7 @@ struct Settings {
 	std::string windowScreen;          // QScreen::name() for fullscreen; empty = primary screen
 	std::string windowGeometry;        // QWidget::saveGeometry() of the windowed viewer, base64
 	bool showLabels = true;
-	int clickAction = 1; // tile click: 0 = off, 1 = to Preview, 2 = to Program
+	int clickAction = 0; // tile click: 0 = off (default), 1 = to Preview, 2 = to Program
 
 	bool showSidebar = true; // health, stream, network, record and audio on the right
 	bool alarms = true;      // flash the health light when something is wrong
