@@ -22,7 +22,7 @@ public:
 
 private:
 	void pickLayout(const std::string &id);
-	void showContextMenu(const QPoint &globalPos);
+	void showContextMenu(const QPoint &globalPos, int slot, int scene);
 
 	MultiviewPanel *panel_ = nullptr;
 	ViewerDisplay *display_ = nullptr;

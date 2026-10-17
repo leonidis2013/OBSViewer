@@ -203,7 +203,7 @@ void ViewerWindow::closeEvent(QCloseEvent *event)
 	QWidget::closeEvent(event);
 }
 
-void ViewerWindow::showContextMenu(const QPoint &globalPos)
+void ViewerWindow::showContextMenu(const QPoint &globalPos, int slot, int scene)
 {
 	QMenu menu(this);
 	menu.setStyleSheet(theme::styleSheet());
@@ -214,7 +214,7 @@ void ViewerWindow::showContextMenu(const QPoint &globalPos)
 			if (self)
 				self->pickLayout(id);
 		},
-		fullscreen_ ? ui::MenuContext::Fullscreen : ui::MenuContext::Window);
+		fullscreen_ ? ui::MenuContext::Fullscreen : ui::MenuContext::Window, slot, scene);
 	menu.exec(globalPos);
 }
 

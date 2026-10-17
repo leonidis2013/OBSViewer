@@ -163,6 +163,19 @@ HealthReport evaluateHealth(const HealthInputs &in)
 		add("Silence", Level::Good, "Audio present");
 	}
 
+	// ---- Picture (Program black or frozen) ----
+	const bool live = in.streaming || in.recording;
+	if (!in.pictureKnown) {
+		add("Picture", Level::Off, "Not checked yet");
+	} else if (in.blackSeconds >= kBlackWarnSec) {
+		const Level l = live && in.blackSeconds >= kBlackBadSec ? Level::Bad : Level::Warn;
+		add("Picture", l, fmt("Program is black (%.0f s)", in.blackSeconds));
+	} else if (in.warnFrozen && live && in.stillSeconds >= kFrozenWarnSec) {
+		add("Picture", Level::Warn, fmt("Program hasn't changed for %.0f s (frozen?)", in.stillSeconds));
+	} else {
+		add("Picture", Level::Good, "Program picture OK");
+	}
+
 	for (const auto &c : r.checks)
 		if (c.level > r.overall)
 			r.overall = c.level;

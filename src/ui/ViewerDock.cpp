@@ -66,12 +66,12 @@ void ViewerDock::pickLayout(const std::string &id)
 	}
 }
 
-void ViewerDock::showContextMenu(const QPoint &globalPos)
+void ViewerDock::showContextMenu(const QPoint &globalPos, int slot, int scene)
 {
 	QMenu menu(this);
 	menu.setStyleSheet(theme::styleSheet());
 	ui::buildViewerMenu(menu, display_->layoutId(), [this](const std::string &id) { pickLayout(id); },
-			    ui::MenuContext::Dock);
+			    ui::MenuContext::Dock, slot, scene);
 	menu.exec(globalPos);
 }
 

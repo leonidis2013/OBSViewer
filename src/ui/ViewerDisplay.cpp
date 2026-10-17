@@ -57,7 +57,7 @@ void ViewerDisplay::setLayoutId(const std::string &id)
 {
 	layout_.store(&layoutById(id));
 	if (counted_)
-		ViewerState::get().setView(this, layout_.load()->fixedScenes);
+		ViewerState::get().setView(this, layout_.load()->id);
 }
 
 std::string ViewerDisplay::layoutId() const
@@ -137,7 +137,7 @@ void ViewerDisplay::showEvent(QShowEvent *event)
 {
 	QWidget::showEvent(event);
 	if (!counted_) {
-		ViewerState::get().setView(this, layout_.load()->fixedScenes);
+		ViewerState::get().setView(this, layout_.load()->id);
 		counted_ = true;
 	}
 	createDisplay();
@@ -156,7 +156,7 @@ void ViewerDisplay::hideEvent(QHideEvent *event)
 	}
 }
 
-bool ViewerDisplay::tileAt(const QPointF &pos, int &kind, int &sceneIndex) const
+bool ViewerDisplay::tileAt(const QPointF &pos, int &kind, int &sceneIndex, int &slot) const
 {
 	// Same placement the renderer uses, in the same logical pixels.
 	const ViewerState &state = ViewerState::get();
@@ -166,35 +166,45 @@ bool ViewerDisplay::tileAt(const QPointF &pos, int &kind, int &sceneIndex) const
 	params.aspect = static_cast<float>(state.canvasWidth()) / static_cast<float>(std::max<uint32_t>(1, state.canvasHeight()));
 	params.labelHeight = Settings::get().showLabels ? labelBandHeight(params.height) : 0.0f;
 	params.gap = 4.0f;
-	params.sceneCount = state.sceneCount();
-	const std::vector<PlacedTile> tiles = placeTiles(layout_.load()->id, params);
+	const std::string id = layout_.load()->id;
+	const std::vector<int> map = state.viewMap(id);
+	params.sceneCount = id == kAutoLayoutId ? static_cast<int>(map.size()) : state.sceneCount();
+	const std::vector<PlacedTile> tiles = placeTiles(id, params);
 	const int hit = obsviewer::tileAt(tiles, static_cast<float>(pos.x()), static_cast<float>(pos.y()));
 	if (hit < 0)
 		return false;
-	kind = static_cast<int>(tiles[static_cast<size_t>(hit)].kind);
-	sceneIndex = tiles[static_cast<size_t>(hit)].sceneIndex;
+	const PlacedTile &t = tiles[static_cast<size_t>(hit)];
+	kind = static_cast<int>(t.kind);
+	slot = t.sceneIndex;
+	sceneIndex = t.kind == TileKind::Scene
+			     ? (static_cast<size_t>(t.sceneIndex) < map.size() ? map[static_cast<size_t>(t.sceneIndex)] : -1)
+			     : -1;
 	return true;
 }
 
 void ViewerDisplay::mousePressEvent(QMouseEvent *event)
 {
-	int kind = 0, scene = -1;
-	if (event->button() == Qt::LeftButton && tileAt(event->position(), kind, scene))
+	int kind = 0, scene = -1, slot = -1;
+	if (event->button() == Qt::LeftButton && tileAt(event->position(), kind, scene, slot) &&
+	    (kind != static_cast<int>(TileKind::Scene) || scene >= 0))
 		emit tileClicked(kind, scene);
 	QWidget::mousePressEvent(event);
 }
 
 void ViewerDisplay::mouseDoubleClickEvent(QMouseEvent *event)
 {
-	int kind = 0, scene = -1;
-	if (event->button() == Qt::LeftButton && tileAt(event->position(), kind, scene))
+	int kind = 0, scene = -1, slot = -1;
+	if (event->button() == Qt::LeftButton && tileAt(event->position(), kind, scene, slot))
 		emit tileDoubleClicked(kind, scene);
 	QWidget::mouseDoubleClickEvent(event);
 }
 
 void ViewerDisplay::contextMenuEvent(QContextMenuEvent *event)
 {
-	emit contextMenuRequested(event->globalPos());
+	int kind = -1, scene = -1, slot = -1;
+	if (!tileAt(event->pos(), kind, scene, slot) || kind != static_cast<int>(TileKind::Scene))
+		slot = scene = -1;
+	emit contextMenuRequested(event->globalPos(), slot, scene);
 	event->accept();
 }
 

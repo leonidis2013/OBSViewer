@@ -1,5 +1,7 @@
 #include "App.hpp"
 
+#include "Hotkeys.hpp"
+
 #include "bus/MasterBus.hpp"
 #include "core/Settings.hpp"
 #include "ui/MasterBusWindow.hpp"
@@ -45,6 +47,7 @@ void App::init()
 	Settings::get().load();
 	ViewerState::get().setShowLabels(Settings::get().showLabels);
 	ViewerState::get().setShowTileMeters(Settings::get().tileMeters);
+	ViewerState::get().setSafeAreas(Settings::get().safeAreas);
 
 	auto *mainWindow = static_cast<QMainWindow *>(obs_frontend_get_main_window());
 
@@ -56,6 +59,7 @@ void App::init()
 	}
 
 	buildToolsMenu();
+	Hotkeys::get().registerAll();
 
 	pollTimer_ = new QTimer(this);
 	pollTimer_->setInterval(kPollIntervalMs);
@@ -134,6 +138,7 @@ void App::handleFrontendEvent(enum obs_frontend_event event)
 
 	case OBS_FRONTEND_EVENT_SCRIPTING_SHUTDOWN:
 	case OBS_FRONTEND_EVENT_EXIT:
+		Hotkeys::get().save();
 		exiting_ = true;
 		Metrics::get().stop();
 		if (masterBus_)
@@ -402,6 +407,8 @@ void App::applySettings()
 	const Settings &s = Settings::get();
 	ViewerState::get().setShowLabels(s.showLabels);
 	ViewerState::get().setShowTileMeters(s.tileMeters);
+	ViewerState::get().setSafeAreas(s.safeAreas);
+	ViewerState::get().updateViewScenes();
 	if (dock_) {
 		dock_->setLayoutId(s.dockLayout);
 		dock_->applySettings();

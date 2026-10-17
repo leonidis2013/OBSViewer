@@ -171,6 +171,28 @@ static void testAutoLayout()
 	CHECK(tiles[0].picture.w > p.width * 0.35f);
 }
 
+static void testPictureHealth()
+{
+	HealthInputs in;
+	CHECK(evaluateHealth(in).levelOf("Picture") == Level::Off);
+	in.pictureKnown = true;
+	CHECK(evaluateHealth(in).levelOf("Picture") == Level::Good);
+	in.blackSeconds = 4.0;
+	CHECK(evaluateHealth(in).levelOf("Picture") == Level::Warn);
+	in.streaming = true;
+	CHECK(evaluateHealth(in).levelOf("Picture") == Level::Warn); // not yet 5 s
+	in.blackSeconds = 6.0;
+	CHECK(evaluateHealth(in).levelOf("Picture") == Level::Bad);
+	in.blackSeconds = 0.0;
+	in.stillSeconds = 90.0;
+	CHECK(evaluateHealth(in).levelOf("Picture") == Level::Warn);
+	in.warnFrozen = false;
+	CHECK(evaluateHealth(in).levelOf("Picture") == Level::Good);
+	in.warnFrozen = true;
+	in.streaming = false; // a still picture while idle is fine
+	CHECK(evaluateHealth(in).levelOf("Picture") == Level::Good);
+}
+
 static void testVersions()
 {
 	const Version a = Version::parse("v0.1.0");
@@ -488,6 +510,7 @@ int main()
 {
 	testLayouts();
 	testAutoLayout();
+	testPictureHealth();
 	testVersions();
 	testSelection();
 	testChecksums();

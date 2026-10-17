@@ -14,6 +14,7 @@
 #include <QMouseEvent>
 #include <QPaintEvent>
 #include <QStackedWidget>
+#include <QTime>
 #include <QTimer>
 #include <QVBoxLayout>
 
@@ -749,6 +750,78 @@ private:
 };
 
 // ---------------------------------------------------------------------------
+// Time of day and the countdown to the next start (Settings ▸ Clock).
+class ClockWidget : public QWidget {
+public:
+	explicit ClockWidget(QWidget *parent) : QWidget(parent)
+	{
+		auto *t = new QTimer(this);
+		t->setInterval(250);
+		connect(t, &QTimer::timeout, this, [this] {
+			const int sec = QTime::currentTime().second();
+			if (sec != lastSecond_ && isVisible()) {
+				lastSecond_ = sec;
+				update();
+			}
+		});
+		t->start();
+		setScale(1.0);
+	}
+
+	void setScale(qreal scale)
+	{
+		scale_ = scale;
+		setFixedHeight(static_cast<int>(std::lround((Settings::get().countdownOn ? 52 : 30) * scale)));
+		update();
+	}
+
+protected:
+	void paintEvent(QPaintEvent *) override
+	{
+		const Settings &st = Settings::get();
+		const qreal s = scale_;
+		QPainter p(this);
+		p.setRenderHint(QPainter::Antialiasing);
+		const QRectF r = QRectF(rect());
+		const QTime now = QTime::currentTime();
+		paint::text(p, QRectF(r.left(), r.top(), r.width(), 28 * s), now.toString(QStringLiteral("h:mm:ss AP")),
+			    col(theme::kText), paint::mono(21 * s, true));
+		if (!st.countdownOn)
+			return;
+
+		// Seconds until today's target; past it by up to an hour counts up.
+		const int nowSec = now.msecsSinceStartOfDay() / 1000;
+		int diff = st.countdownMinutes * 60 - nowSec;
+		const QRectF line(r.left(), r.top() + 30 * s, r.width(), 18 * s);
+		const QString label = QString::fromStdString(st.countdownLabel);
+		if (diff > 12 * 3600 || diff < -3600) {
+			paint::text(p, line, QStringLiteral("%1 at %2").arg(label, QTime(0, 0).addSecs(st.countdownMinutes * 60).toString(QStringLiteral("h:mm AP"))),
+				    col(theme::kTextFaint), paint::font(11 * s));
+			return;
+		}
+		const bool past = diff < 0;
+		diff = std::abs(diff);
+		const QString clock = diff >= 3600 ? QStringLiteral("%1:%2:%3")
+								.arg(diff / 3600)
+								.arg((diff / 60) % 60, 2, 10, QLatin1Char('0'))
+								.arg(diff % 60, 2, 10, QLatin1Char('0'))
+						   : QStringLiteral("%1:%2").arg(diff / 60).arg(diff % 60, 2, 10, QLatin1Char('0'));
+		const uint32_t color = past ? theme::kBad : diff <= 120 ? theme::kWarn : theme::kGood;
+		paint::text(p, line, past ? QStringLiteral("%1 · +%2").arg(label, clock) : QStringLiteral("%1 in").arg(label),
+			    col(theme::kTextDim), paint::font(11 * s));
+		if (!past)
+			paint::text(p, line, clock, col(color), paint::mono(14 * s, true), Qt::AlignRight | Qt::AlignVCenter);
+		else
+			paint::text(p, line, QStringLiteral("started"), col(color), paint::font(11 * s, true),
+				    Qt::AlignRight | Qt::AlignVCenter);
+	}
+
+private:
+	qreal scale_ = 1.0;
+	int lastSecond_ = -1;
+};
+
+// ---------------------------------------------------------------------------
 // Short-term loudness over the last 5 minutes against the target band.
 class LoudnessHistory : public QWidget {
 public:
@@ -863,6 +936,10 @@ SidePanel::SidePanel(QWidget *parent) : QWidget(parent)
 	cl->setContentsMargins(0, 0, 0, 0);
 	cl->setSpacing(6);
 
+	clockSection_ = new Section(QStringLiteral("Clock"), theme::kAccentSky, controls);
+	clock_ = new ClockWidget(clockSection_);
+	clockSection_->addChild(clock_);
+
 	streamSection_ = new Section(QStringLiteral("Stream"), theme::kAccentTeal, controls);
 	streamButton_ = new StateButton(streamSection_);
 	network_ = new NetworkStats(streamSection_);
@@ -883,6 +960,7 @@ SidePanel::SidePanel(QWidget *parent) : QWidget(parent)
 	audioSection_->addChild(meter_, 1);
 	audioSection_->addChild(loudness_);
 
+	cl->addWidget(clockSection_);
 	cl->addWidget(streamSection_);
 	cl->addWidget(recordSection_);
 	cl->addWidget(audioSection_, 1);
@@ -936,6 +1014,8 @@ void SidePanel::setCompact(bool compact)
 	compact_ = compact;
 	const qreal s = compact ? 0.84 : 1.0;
 	setFixedWidth(compact ? 184 : 236);
+	clockSection_->setScale(s);
+	clock_->setScale(s);
 	streamSection_->setScale(s);
 	recordSection_->setScale(s);
 	audioSection_->setScale(s);
@@ -943,6 +1023,12 @@ void SidePanel::setCompact(bool compact)
 	meter_->setScale(s);
 	loudness_->setScale(s);
 	refresh();
+}
+
+void SidePanel::applySettings()
+{
+	clockSection_->setVisible(Settings::get().showClock);
+	clock_->setScale(compact_ ? 0.84 : 1.0); // height depends on the countdown
 }
 
 void SidePanel::paintEvent(QPaintEvent *)
@@ -1004,6 +1090,15 @@ void SidePanel::refresh()
 		recordButton_->setLook(QStringLiteral("Start recording"), theme::kPanelRaised, theme::kText, true, s);
 
 	std::vector<StatLines::Line> rl;
+	if (m.record.active) {
+		if (!m.record.fileName.empty())
+			rl.push_back({QStringLiteral("File"), QString::fromStdString(m.record.fileName), theme::kText});
+		const double mb = static_cast<double>(m.record.bytes) / 1e6;
+		rl.push_back({QStringLiteral("Size"),
+			      mb >= 1000.0 ? QStringLiteral("%1 GB").arg(mb / 1000.0, 0, 'f', 2)
+					   : QStringLiteral("%1 MB").arg(mb, 0, 'f', 0),
+			      theme::kText});
+	}
 	if (m.record.diskFreeGB >= 0.0) {
 		QString value = QStringLiteral("%1 GB free").arg(m.record.diskFreeGB, 0, 'f', 0);
 		if (m.record.hoursLeft >= 0.0)

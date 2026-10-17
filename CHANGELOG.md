@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.7.0] — 2026-10-16
+
+The remaining planned utilities.
+
+- **Black / frozen picture alarm:** the health light warns if Program goes black (a problem after 5 s while live) or hasn't changed for a minute while live. The frozen warning can be turned off in Settings.
+- **Clock and countdown:** a Clock section at the top of the side bar shows the time and, if you set one in Settings ▸ Clock, a daily countdown such as "Service starts in 4:12".
+- **Choose the scene for each view:** right-click a scene view ▸ This View Shows ▸ any scene (or Automatic). In the Dynamic layout, right-click ▸ Hide a scene, and Hidden Scenes to bring it back.
+- **Safe-area guides** on Program and Preview (Settings ▸ Multiview).
+- **Hotkeys:** OBS ▸ Settings ▸ Hotkeys now lists OBSViewer actions: open window, fullscreen on/off, close, next layout, each layout, master bus on/off, show master bus. They also work from a Stream Deck's Hotkey button.
+- **Recording file and size** in the Record section while recording.
+- **Simpler updates:** the GitHub token setting is gone (the repository is public). An old saved token is ignored if GitHub refuses it and can be removed in Settings ▸ Updates.
+- Settings scroll if the screen is short.
+
+
 ## [0.6.3] — 2026-10-16
 
 Fixes and speed-ups from the code review.

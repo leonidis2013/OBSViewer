@@ -34,6 +34,10 @@ To uninstall, quit OBS and delete
   click then sends a scene to Preview (or cuts it to Program). Double-click Preview to
   take it to Program.
 - **Tally:** a red name band = on Program, green = in Preview (Studio Mode).
+- **Scene per view:** right-click a scene view ▸ This View Shows to pick its scene; in
+  Dynamic, right-click ▸ Hide a scene.
+- **Hotkeys:** OBS ▸ Settings ▸ Hotkeys ▸ "OBSViewer: …" (also from a Stream Deck).
+- **Clock:** Settings ▸ Clock sets a daily countdown (e.g. "Service starts").
 - **Side bar:** health and performance lights (click for details), Start stream with
   upload, bitrate history, dropped frames and connection, Start recording with disk
   space, and the programme loudness meter with its 5-minute history.
@@ -72,18 +76,8 @@ OBS closes, the update installs, and OBS opens again on its own (OBS asks first 
 you're streaming or recording). **Install Manually…** opens the installer instead if
 you prefer. What the restart did is logged in `~/Library/Logs/OBSViewer/update.log`.
 
-**While this repository is private**, GitHub only shows its releases to signed-in
-requests, so the updater needs a token:
-
-1. On GitHub: Settings ▸ Developer settings ▸ Personal access tokens ▸
-   **Fine-grained tokens** ▸ Generate new token.
-2. Repository access: **Only select repositories** ▸ `OBSViewer`.
-   Permissions: **Contents: Read-only**. Nothing else.
-3. In OBS: Tools ▸ OBSViewer ▸ Settings ▸ Updates ▸ paste it into **GitHub token**,
-   then OK. It's stored in your macOS Keychain.
-
-Making the repository public (or publishing releases from a separate public repo and
-changing **Repository** in Settings) removes the need for a token.
+The repository is public, so no GitHub token is needed. (If an older version saved
+one, Settings ▸ Updates ▸ Remove Saved Token deletes it.)
 
 ## Build
 

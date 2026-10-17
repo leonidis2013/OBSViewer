@@ -20,6 +20,8 @@
 #include <QLabel>
 #include <QLineEdit>
 #include <QPushButton>
+#include <QScrollArea>
+#include <QTimeEdit>
 #include <QVBoxLayout>
 
 #include <algorithm>
@@ -79,6 +81,29 @@ SettingsDialog::SettingsDialog(QWidget *parent) : QDialog(parent)
 	viewForm->addRow(QString(), alarms_);
 	busEmbedded_ = new QCheckBox(tr("Open the master bus next to the side bar (instead of its own window)"), viewGroup);
 	viewForm->addRow(QString(), busEmbedded_);
+	safeAreas_ = new QCheckBox(tr("Show safe-area guides on Program and Preview"), viewGroup);
+	viewForm->addRow(QString(), safeAreas_);
+	warnFrozen_ = new QCheckBox(tr("Warn when Program hasn't changed for a minute while live"), viewGroup);
+	warnFrozen_->setToolTip(tr("A black Program picture is always reported."));
+	viewForm->addRow(QString(), warnFrozen_);
+
+	// ---- Clock ----
+	auto *clockGroup = new QGroupBox(tr("Clock"), this);
+	auto *clockForm = new QFormLayout(clockGroup);
+	showClock_ = new QCheckBox(tr("Show the clock in the side bar"), clockGroup);
+	countdownOn_ = new QCheckBox(tr("Count down to a time each day"), clockGroup);
+	countdownTime_ = new QTimeEdit(clockGroup);
+	countdownTime_->setDisplayFormat(QStringLiteral("h:mm AP"));
+	countdownLabel_ = new QLineEdit(clockGroup);
+	countdownLabel_->setPlaceholderText(tr("Service starts"));
+	clockForm->addRow(QString(), showClock_);
+	clockForm->addRow(QString(), countdownOn_);
+	clockForm->addRow(tr("Count down to"), countdownTime_);
+	clockForm->addRow(tr("Label"), countdownLabel_);
+	connect(countdownOn_, &QCheckBox::toggled, this, [this](bool on) {
+		countdownTime_->setEnabled(on);
+		countdownLabel_->setEnabled(on);
+	});
 	auto describe = [this](QComboBox *box) {
 		layoutHelp_->setText(QString::fromStdString(layoutById(box->currentData().toString().toStdString()).description));
 	};
@@ -129,25 +154,18 @@ SettingsDialog::SettingsDialog(QWidget *parent) : QDialog(parent)
 	repo_ = new QLineEdit(updateGroup);
 	repo_->setPlaceholderText(QStringLiteral("owner/repository"));
 
-	token_ = new QLineEdit(updateGroup);
-	token_->setEchoMode(QLineEdit::Password);
-	token_->setPlaceholderText(tr("Paste a token to save it"));
-	auto *clearToken = new QPushButton(tr("Remove"), updateGroup);
-	auto *tokenRow = new QHBoxLayout();
-	tokenRow->addWidget(token_, 1);
-	tokenRow->addWidget(clearToken);
-
+	// The release repository is public, so no GitHub token is needed. A token
+	// saved by an older version is still used; it can be removed here.
 	tokenStatus_ = new QLabel(updateGroup);
 	tokenStatus_->setWordWrap(true);
 	tokenStatus_->setProperty("dim", true);
-
-	auto *tokenHelp = new QLabel(
-		tr("Needed only while the release repository is private. Create a fine-grained personal access "
-		   "token on GitHub with read-only <i>Contents</i> access to that repository. It is stored in your "
-		   "macOS Keychain, never in a file."),
-		updateGroup);
-	tokenHelp->setWordWrap(true);
-	tokenHelp->setProperty("dim", true);
+	auto *clearToken = new QPushButton(tr("Remove Saved Token"), updateGroup);
+	clearToken->setToolTip(tr("A GitHub token from when the repository was private; it isn't needed any more."));
+	tokenRow_ = new QWidget(updateGroup);
+	auto *tokenRow = new QHBoxLayout(tokenRow_);
+	tokenRow->setContentsMargins(0, 0, 0, 0);
+	tokenRow->addWidget(tokenStatus_, 1);
+	tokenRow->addWidget(clearToken);
 
 	auto *checkNow = new QPushButton(tr("Check Now"), updateGroup);
 
@@ -155,20 +173,34 @@ SettingsDialog::SettingsDialog(QWidget *parent) : QDialog(parent)
 	updateForm->addRow(QString(), autoCheck_);
 	updateForm->addRow(QString(), prereleases_);
 	updateForm->addRow(tr("Repository"), repo_);
-	updateForm->addRow(tr("GitHub token"), tokenRow);
-	updateForm->addRow(QString(), tokenStatus_);
-	updateForm->addRow(QString(), tokenHelp);
+	updateForm->addRow(QString(), tokenRow_);
 	updateForm->addRow(QString(), checkNow);
 
 	auto *buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, this);
 
+	// Groups scroll if the screen is short; the OK / Cancel buttons stay put.
+	auto *content = new QWidget(this);
+	content->setObjectName(QStringLiteral("OBSViewerRoot"));
+	auto *cl = new QVBoxLayout(content);
+	cl->setContentsMargins(0, 0, 6, 0);
+	cl->setSpacing(12);
+	cl->addWidget(viewGroup);
+	cl->addWidget(clockGroup);
+	cl->addWidget(audioGroup);
+	cl->addWidget(updateGroup);
+	cl->addStretch(1);
+	auto *scroll = new QScrollArea(this);
+	scroll->setWidgetResizable(true);
+	scroll->setFrameShape(QFrame::NoFrame);
+	scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+	scroll->setWidget(content);
+
 	auto *layout = new QVBoxLayout(this);
 	layout->setContentsMargins(18, 16, 18, 16);
 	layout->setSpacing(12);
-	layout->addWidget(viewGroup);
-	layout->addWidget(audioGroup);
-	layout->addWidget(updateGroup);
+	layout->addWidget(scroll, 1);
 	layout->addWidget(buttons);
+	resize(600, 860);
 
 	connect(buttons, &QDialogButtonBox::accepted, this, [this] {
 		apply();
@@ -177,7 +209,6 @@ SettingsDialog::SettingsDialog(QWidget *parent) : QDialog(parent)
 	connect(buttons, &QDialogButtonBox::rejected, this, &QDialog::reject);
 	connect(clearToken, &QPushButton::clicked, this, [this] {
 		keychain::removeToken();
-		token_->clear();
 		refreshTokenStatus();
 	});
 	connect(checkNow, &QPushButton::clicked, this, [this] {
@@ -197,6 +228,14 @@ void SettingsDialog::load()
 	showSidebar_->setChecked(s.showSidebar);
 	alarms_->setChecked(s.alarms);
 	busEmbedded_->setChecked(s.masterBusEmbedded);
+	safeAreas_->setChecked(s.safeAreas);
+	warnFrozen_->setChecked(s.warnFrozen);
+	showClock_->setChecked(s.showClock);
+	countdownOn_->setChecked(s.countdownOn);
+	countdownTime_->setTime(QTime(0, 0).addSecs(s.countdownMinutes * 60));
+	countdownLabel_->setText(QString::fromStdString(s.countdownLabel));
+	countdownTime_->setEnabled(s.countdownOn);
+	countdownLabel_->setEnabled(s.countdownOn);
 	tileMeters_->setChecked(s.tileMeters);
 	loudnessPreset_->setCurrentIndex(std::clamp(s.loudnessPreset, 0, bm::kNumLoudnessPresets - 1));
 	customTarget_->setValue(s.customTargetLufs);
@@ -207,14 +246,14 @@ void SettingsDialog::load()
 	autoCheck_->setChecked(s.updateAutoCheck);
 	prereleases_->setChecked(s.updateIncludePrereleases);
 	repo_->setText(QString::fromStdString(s.updateRepo));
-	token_->clear();
 	refreshTokenStatus();
 }
 
 void SettingsDialog::refreshTokenStatus()
 {
 	tokenSaved_ = !keychain::loadToken().empty();
-	tokenStatus_->setText(tokenSaved_ ? tr("A token is saved in the Keychain.") : tr("No token saved."));
+	tokenStatus_->setText(tr("A GitHub token is saved in the Keychain (no longer needed)."));
+	tokenRow_->setVisible(tokenSaved_);
 }
 
 void SettingsDialog::apply()
@@ -226,6 +265,13 @@ void SettingsDialog::apply()
 	s.showSidebar = showSidebar_->isChecked();
 	s.alarms = alarms_->isChecked();
 	s.masterBusEmbedded = busEmbedded_->isChecked();
+	s.safeAreas = safeAreas_->isChecked();
+	s.warnFrozen = warnFrozen_->isChecked();
+	s.showClock = showClock_->isChecked();
+	s.countdownOn = countdownOn_->isChecked();
+	s.countdownMinutes = countdownTime_->time().hour() * 60 + countdownTime_->time().minute();
+	s.countdownLabel = countdownLabel_->text().trimmed().isEmpty() ? std::string("Service starts")
+								     : countdownLabel_->text().trimmed().toStdString();
 	s.tileMeters = tileMeters_->isChecked();
 	s.loudnessPreset = loudnessPreset_->currentIndex();
 	s.customTargetLufs = static_cast<float>(customTarget_->value());
@@ -238,11 +284,6 @@ void SettingsDialog::apply()
 	if (repo.count(QLatin1Char('/')) == 1 && !repo.startsWith(QLatin1Char('/')) && !repo.endsWith(QLatin1Char('/')))
 		s.updateRepo = repo.toStdString();
 
-	const QString token = token_->text().trimmed();
-	if (!token.isEmpty()) {
-		keychain::saveToken(token.toStdString());
-		token_->clear();
-	}
 	refreshTokenStatus();
 
 	s.save();

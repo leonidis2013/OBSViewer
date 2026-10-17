@@ -342,9 +342,18 @@ void Renderer::render(const std::string &layoutId, uint32_t cx, uint32_t cy, flo
 	params.aspect = aspect;
 	params.labelHeight = snap.showLabels ? labelBandHeight(H) : 0.0f;
 	params.gap = 4.0f;
-	params.sceneCount = static_cast<int>(snap.scenes.size());
+	// Which scene each view shows (Settings / right-click ▸ This View Shows).
+	const std::string &resolvedId = layoutById(layoutId).id;
+	const std::vector<int> *viewMap = nullptr;
+	if (snap.viewMaps) {
+		const auto it = snap.viewMaps->find(resolvedId);
+		if (it != snap.viewMaps->end())
+			viewMap = &it->second;
+	}
+	params.sceneCount = viewMap && resolvedId == kAutoLayoutId ? static_cast<int>(viewMap->size())
+								      : static_cast<int>(snap.scenes.size());
 	const std::vector<PlacedTile> tiles = placeTiles(layoutId, params);
-	const bool halfRate = layoutById(layoutId).id == kAutoLayoutId;
+	const bool halfRate = resolvedId == kAutoLayoutId;
 	++cache.frame;
 
 	Frame f;
@@ -368,6 +377,12 @@ void Renderer::render(const std::string &layoutId, uint32_t cx, uint32_t cy, flo
 	for (const PlacedTile &tile : tiles) {
 		const Rect pic{tile.picture.x, tile.picture.y, tile.picture.w, tile.picture.h};
 		const Rect band{tile.label.x, tile.label.y, tile.label.w, tile.label.h};
+		// tile.sceneIndex is the view's position; this is the scene it shows.
+		const int sceneIdx = tile.kind != TileKind::Scene ? -1
+				     : viewMap ? (static_cast<size_t>(tile.sceneIndex) < viewMap->size()
+							  ? (*viewMap)[static_cast<size_t>(tile.sceneIndex)]
+							  : -1)
+					       : tile.sceneIndex;
 
 		obs_source_t *source = nullptr;
 		obs_source_t *label = nullptr;
@@ -392,9 +407,9 @@ void Renderer::render(const std::string &layoutId, uint32_t cx, uint32_t cy, flo
 			tab = snap.studioMode ? theme::kGood : theme::kTextFaint;
 			break;
 		case TileKind::Scene:
-			if (tile.sceneIndex >= 0 && static_cast<size_t>(tile.sceneIndex) < snap.scenes.size()) {
-				source = snap.scenes[tile.sceneIndex];
-				label = snap.sceneLabels[tile.sceneIndex];
+			if (sceneIdx >= 0 && static_cast<size_t>(sceneIdx) < snap.scenes.size()) {
+				source = snap.scenes[static_cast<size_t>(sceneIdx)];
+				label = snap.sceneLabels[static_cast<size_t>(sceneIdx)];
 				if (source && source == snap.program) {
 					edge = theme::kBad;
 					bandFill = theme::kTallyProgram;
@@ -412,7 +427,7 @@ void Renderer::render(const std::string &layoutId, uint32_t cx, uint32_t cy, flo
 		if (isProgram)
 			renderScaled(f, pic, [] { obs_render_main_texture(); });
 		else if (source && halfRate && tile.kind == TileKind::Scene)
-			renderSceneHalfRate(cache, tile.sceneIndex, source, pic, dpr, f.fw, f.fh);
+			renderSceneHalfRate(cache, sceneIdx, source, pic, dpr, f.fw, f.fh);
 		else if (source)
 			renderScaled(f, pic, [source] { obs_source_video_render(source); });
 
@@ -420,6 +435,19 @@ void Renderer::render(const std::string &layoutId, uint32_t cx, uint32_t cy, flo
 			drawFrame(Rect{pic.x, pic.y, pic.w, pic.h + band.h}, tally, edge);
 		else
 			drawFrame(Rect{pic.x, pic.y, pic.w, pic.h + band.h}, px, theme::kBorder);
+
+		// Safe-area guides on Program and Preview: action safe 93 %, title safe 90 %,
+		// and a small centre mark.
+		if (snap.safeAreas && tile.kind != TileKind::Scene) {
+			for (float frac : {0.93f, 0.90f}) {
+				const float dx = pic.w * (1.0f - frac) / 2.0f, dy = pic.h * (1.0f - frac) / 2.0f;
+				drawFrame(Rect{pic.x + dx, pic.y + dy, pic.w - 2 * dx, pic.h - 2 * dy}, px,
+					  frac > 0.92f ? 0x80FFFFFFu : 0x80F2C94Cu);
+			}
+			const float cxp = pic.x + pic.w / 2.0f, cyp = pic.y + pic.h / 2.0f, arm = pic.h * 0.03f;
+			drawBox(cxp - arm, cyp - px / 2.0f, 2.0f * arm, px, 0x80FFFFFFu);
+			drawBox(cxp - px / 2.0f, cyp - arm, px, 2.0f * arm, 0x80FFFFFFu);
+		}
 
 		if (snap.showTileMeters) {
 			levels::TileLevels tl;
@@ -432,9 +460,9 @@ void Renderer::render(const std::string &layoutId, uint32_t cx, uint32_t cy, flo
 				tl.clipped = a.truePeak3s > 0.0f;
 			} else if (tile.kind == TileKind::Preview) {
 				tl = readTile(snap.previewAudio, now);
-			} else if (tile.kind == TileKind::Scene && tile.sceneIndex >= 0 &&
-				   static_cast<size_t>(tile.sceneIndex) < snap.sceneAudio.size()) {
-				tl = readTile(snap.sceneAudio[tile.sceneIndex], now);
+			} else if (tile.kind == TileKind::Scene && sceneIdx >= 0 &&
+				   static_cast<size_t>(sceneIdx) < snap.sceneAudio.size()) {
+				tl = readTile(snap.sceneAudio[static_cast<size_t>(sceneIdx)], now);
 			}
 			drawTileMeter(tl, pic, px, pad, snap.mutedLabel, std::max(10.0f, pic.h * 0.1f));
 		}

@@ -16,14 +16,15 @@ channel strip that hosts VST3 and Audio Unit plugins.
 | Approach | Native OBS plugin (C++, libobs + obs-frontend-api + Qt 6). OBS's own Multiview cannot be extended by plugins, so OBSViewer draws its own. |
 | Platforms | macOS 13+, universal binary (arm64 + x86_64). Windows and Linux are out of scope. |
 | Minimum OBS | 32.x (built against 32.2.2). |
-| Where it shows | Both: an OBS dock **and** a fullscreen window on any monitor. |
-| Layouts | Several presets, switchable live from the dock, the fullscreen window's right-click menu, or Settings. Dock and fullscreen window each keep their own layout. |
-| Click on tiles | Off by default. When enabled: click = send scene to Preview, double-click = cut to Program. |
+| Where it shows | An OBS dock **and** one viewer window that is either windowed or fullscreen on any monitor. |
+| Layouts | Dynamic (default) plus fixed presets, switchable from Settings, the right-click menu or hotkeys. Dock and window each keep their own layout; each scene view can be set to any scene. |
+| Click on tiles | Off by default. When enabled: click = send scene to Preview (or cut to Program); double-click Preview = transition. |
 | Theme | LiveVoice dark palette and panel style (see §6; BroadcastMaster palette until 0.5.0). |
 | Loudness | LUFS / true peak measured inside OBSViewer (no dependency on BroadcastMaster). |
-| Channel strip | Master bus **and** per-source strip. Hosts VST3 + Audio Unit. Plugins run in-process first; a sandboxed mode comes later. Insert slots with reorder, gain stages + meters, multiview integration. Chain presets are not in scope. |
-| Distribution | Private GitHub repo `leonidis2013/OBSViewer`. Each tagged release publishes a macOS `.pkg` installer. |
-| Updates | The plugin checks GitHub Releases, shows release notes, downloads the `.pkg`, verifies its SHA-256, and opens the installer. |
+| Channel strip | Master bus only (per-source strip dropped). Hosts VST3 + Audio Unit in-process; scanning is out of process. Insert slots with reorder, trim, fader + meters, status on the multiview. No chain presets. |
+| Product | Stays an OBS plugin (no standalone app). Private church use; not shared or sold. |
+| Distribution | Public GitHub repo `leonidis2013/OBSViewer`. Each new version on main publishes a macOS `.pkg` installer. |
+| Updates | The plugin checks GitHub Releases, shows release notes, downloads the `.pkg`, verifies its SHA-256, and **Restart OBS** installs it and reopens OBS. No token needed (public repo). |
 
 ---
 
@@ -241,6 +242,29 @@ only for a Problem.
 - **Meter track:** follows the stream's audio encoder (or the profile's stream track)
   unless a track is picked manually.
 
+### Utilities (0.7.0)
+
+- **Picture check:** after OBS renders its main view, every 10th frame the Program
+  texture is shrunk to 32 × 18 on the GPU and staged; the previous sample is read
+  back (no stall). Average luma < 0.035 counts as black; mean per-pixel change
+  < 0.0008 as still. Health "Picture": black ≥ 3 s warning, ≥ 5 s while streaming or
+  recording problem; unchanged ≥ 60 s while live warning (Settings can turn the
+  frozen warning off).
+- **Clock:** side bar section with the time of day; optional daily countdown to a set
+  time with a label ("Service starts in 4:12", amber in the last 2 minutes, then
+  "+m:ss started" for an hour). Hidden more than 12 h before.
+- **Scene per view:** right-click a scene view ▸ This View Shows ▸ Automatic or any
+  scene (per fixed layout, by scene name). Dynamic: right-click ▸ Hide “scene”;
+  Hidden Scenes ▸ Show / Show All. Renderer, clicks and the "showing" marks all use
+  the same per-layout map (`ViewerState::viewMap`).
+- **Safe areas:** optional action-safe (93 %, white) and title-safe (90 %, amber)
+  frames and a centre mark on Program and Preview.
+- **Hotkeys:** OBS ▸ Settings ▸ Hotkeys lists "OBSViewer: …" — open window,
+  fullscreen on/off, close window, next layout, each window layout, master bus
+  on/off, show master bus. Saved in `hotkeys.json` on exit. Stream Deck can trigger
+  them with its Hotkey action.
+- **Recording:** the side bar shows the file being written and its size.
+
 ## 5. Settings
 
 Stored as JSON in `~/Library/Application Support/obs-studio/plugin_config/obsviewer/config.json`.
@@ -257,6 +281,12 @@ Stored as JSON in `~/Library/Application Support/obs-studio/plugin_config/obsvie
 | `show_sidebar` | `true` | Right-hand side bar. |
 | `alarms` | `true` | Flash the health light on a Problem. |
 | `master_bus_embedded` | `true` | Master bus opens next to the side bar (else in its own window). |
+| `safe_areas` | `false` | Safe-area guides on Program and Preview. |
+| `warn_frozen` | `true` | Health warns when Program hasn't changed for 60 s while live. |
+| `show_clock` | `true` | Clock section in the side bar. |
+| `countdown_on` / `countdown_minutes` / `countdown_label` | off / 630 (10:30) / "Service starts" | Daily countdown. |
+| `view_scenes` | — | Per fixed layout: scene name for each view ("" = automatic). |
+| `dynamic_hidden` | — | Scenes left out of the Dynamic layout. |
 | `loudness_preset` | `0` (YouTube −14) | Loudness target preset. |
 | `custom_target_lufs` | `-16` | Target when the preset is Custom. |
 | `meter_track` | `0` | 0 = follow the stream track, else Track 1–6. |
@@ -266,7 +296,9 @@ Stored as JSON in `~/Library/Application Support/obs-studio/plugin_config/obsvie
 | `update_include_prereleases` | `false` | Also offer beta / rc releases. |
 | `update_skipped_version` | — | A version the user chose to skip. |
 
-The GitHub token is **not** stored in this file; it lives in the macOS Keychain.
+A GitHub token saved by older versions lives in the macOS Keychain; it's no longer
+needed (the repository is public), is skipped if GitHub refuses it, and can be removed
+in Settings ▸ Updates. Hotkey bindings are in `hotkeys.json`.
 
 ---
 

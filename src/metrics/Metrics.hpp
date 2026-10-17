@@ -56,6 +56,8 @@ public:
 		double kbps = 0.0;
 		double diskFreeGB = -1.0;
 		double hoursLeft = -1.0;
+		uint64_t bytes = 0;    // size of the recording so far
+		std::string fileName; // file being written (name only), empty if unknown
 	} record;
 
 	struct System {
@@ -70,6 +72,10 @@ public:
 
 	ProgramLoudness::Snapshot audio; // refreshed by refreshAudio(), ~20 Hz
 	double silentSeconds = 0.0;
+	// Program picture (PictureMonitor), seconds black / unchanged.
+	bool pictureKnown = false;
+	double blackSeconds = 0.0;
+	double stillSeconds = 0.0;
 
 	History<BitrateSample> bitrateHistory{300};
 	History<float> loudnessHistory{300}; // short-term LUFS once per second

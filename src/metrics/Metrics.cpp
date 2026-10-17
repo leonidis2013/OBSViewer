@@ -1,4 +1,5 @@
 #include "metrics/Metrics.hpp"
+#include "metrics/PictureMonitor.hpp"
 
 #include "audio/meters/LoudnessPresets.h"
 #include "core/Settings.hpp"
@@ -130,6 +131,7 @@ void Metrics::start()
 		timer_->setInterval(1000);
 		connect(timer_, &QTimer::timeout, this, &Metrics::sample);
 	}
+	PictureMonitor::get().start();
 	if (!cpu_)
 		cpu_ = os_cpu_usage_info_start();
 	ProgramLoudness::get().start(meterTrackIndex());
@@ -141,6 +143,7 @@ void Metrics::stop()
 {
 	if (timer_)
 		timer_->stop();
+	PictureMonitor::get().stop();
 	ProgramLoudness::get().stop();
 	if (cpu_) {
 		os_cpu_usage_info_destroy(cpu_);
@@ -232,6 +235,15 @@ void Metrics::sample()
 			record.durationSec = obs_output_get_total_frames(rec) / std::max(1.0, fps);
 
 			const uint64_t bytes = obs_output_get_total_bytes(rec);
+			record.bytes = bytes;
+			if (obs_data_t *os = obs_output_get_settings(rec)) {
+				std::string path = obs_data_get_string(os, "path");
+				if (path.empty())
+					path = obs_data_get_string(os, "url");
+				const size_t slash = path.find_last_of('/');
+				record.fileName = slash == std::string::npos ? path : path.substr(slash + 1);
+				obs_data_release(os);
+			}
 			if (bytes >= lastRecordBytes_ && lastRecordBytes_ > 0 && !record.paused)
 				record.kbps = 0.8 * record.kbps +
 					      0.2 * (static_cast<double>(bytes - lastRecordBytes_) * 8.0 / 1000.0 / dt);
@@ -242,6 +254,8 @@ void Metrics::sample()
 	if (!record.active) {
 		record.durationSec = 0.0;
 		record.kbps = 0.0;
+		record.bytes = 0;
+		record.fileName.clear();
 		lastRecordBytes_ = 0;
 	}
 
@@ -281,6 +295,18 @@ void Metrics::sample()
 		silentSeconds += dt;
 	else
 		silentSeconds = 0.0;
+
+	// ---------------- picture ----------------
+	{
+		const PictureMonitor::Reading pic = PictureMonitor::get().read();
+		pictureKnown = pic.valid;
+		if (pic.valid) {
+			blackSeconds = pic.luma < 0.035f ? blackSeconds + dt : 0.0;
+			stillSeconds = pic.motion < 0.0008f ? stillSeconds + dt : 0.0;
+		} else {
+			blackSeconds = stillSeconds = 0.0;
+		}
+	}
 
 	// ---------------- performance ----------------
 	{
@@ -328,6 +354,10 @@ void Metrics::sample()
 	in.integratedLufs = audio.integrated;
 	in.truePeakRecentDb = audio.truePeak3s;
 	in.silentSeconds = silentSeconds;
+	in.pictureKnown = pictureKnown;
+	in.blackSeconds = blackSeconds;
+	in.stillSeconds = stillSeconds;
+	in.warnFrozen = Settings::get().warnFrozen;
 	in.targetLufs = targetLufs();
 	in.toleranceLu = toleranceLu();
 	in.ceilingDbtp = ceilingDbtp();

@@ -28,7 +28,16 @@ struct HealthInputs {
 	float targetLufs = -14.0f;
 	float toleranceLu = 1.0f;
 	float ceilingDbtp = -1.0f;
+	bool pictureKnown = false;    // Program picture is being sampled
+	double blackSeconds = 0.0;    // Program has been (near) black this long
+	double stillSeconds = 0.0;    // Program hasn't changed this long
+	bool warnFrozen = true;       // Settings: warn about a frozen picture
 };
+
+// Picture thresholds (also used by the sampler).
+constexpr double kBlackWarnSec = 3.0;   // black this long → warning
+constexpr double kBlackBadSec = 5.0;    // … while live → problem
+constexpr double kFrozenWarnSec = 60.0; // no change this long while live → warning
 
 struct HealthCheck {
 	std::string name;   // "Network"

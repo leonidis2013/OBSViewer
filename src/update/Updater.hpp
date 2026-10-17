@@ -69,6 +69,7 @@ private:
 
 	std::thread worker_;
 	std::atomic<bool> busy_{false};
+	std::atomic<bool> tokenRejected_{false}; // a saved token GitHub refused; the repo works without it
 	std::atomic<bool> cancel_{false};
 	QPointer<UpdateDialog> dialog_;
 };

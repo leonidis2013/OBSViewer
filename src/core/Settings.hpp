@@ -1,7 +1,9 @@
 #pragma once
 
 #include <cstdint>
+#include <map>
 #include <string>
+#include <vector>
 
 namespace obsviewer {
 
@@ -18,6 +20,20 @@ struct Settings {
 	bool showSidebar = true; // health, stream, network, record and audio on the right
 	bool alarms = true;      // flash the health light when something is wrong
 	bool masterBusEmbedded = true; // master bus opens next to the side bar (else in its own window)
+	bool warnFrozen = true;        // health warns when Program hasn't changed for a minute while live
+	bool safeAreas = false;        // action-safe / title-safe guides on Program and Preview
+
+	// Clock and countdown in the side bar.
+	bool showClock = true;
+	bool countdownOn = false;
+	int countdownMinutes = 10 * 60 + 30; // time of day to count down to, minutes after midnight
+	std::string countdownLabel = "Service starts";
+
+	// Which scene each view shows. Fixed layouts: layout id → scene name per view
+	// ("" = automatic, the view's position in the scene list). Dynamic: scene
+	// names left out.
+	std::map<std::string, std::vector<std::string>> viewScenes;
+	std::vector<std::string> dynamicHidden;
 	bool tileMeters = true;  // audio meters on each tile
 
 	// Audio

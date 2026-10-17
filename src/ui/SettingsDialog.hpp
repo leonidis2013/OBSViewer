@@ -7,6 +7,7 @@ class QDoubleSpinBox;
 class QComboBox;
 class QLabel;
 class QLineEdit;
+class QTimeEdit;
 
 namespace obsviewer {
 
@@ -27,6 +28,12 @@ private:
 	QCheckBox *showSidebar_ = nullptr;
 	QCheckBox *alarms_ = nullptr;
 	QCheckBox *busEmbedded_ = nullptr;
+	QCheckBox *safeAreas_ = nullptr;
+	QCheckBox *warnFrozen_ = nullptr;
+	QCheckBox *showClock_ = nullptr;
+	QCheckBox *countdownOn_ = nullptr;
+	QTimeEdit *countdownTime_ = nullptr;
+	QLineEdit *countdownLabel_ = nullptr;
 	QCheckBox *tileMeters_ = nullptr;
 
 	QComboBox *loudnessPreset_ = nullptr;
@@ -38,7 +45,7 @@ private:
 	QCheckBox *autoCheck_ = nullptr;
 	QCheckBox *prereleases_ = nullptr;
 	QLineEdit *repo_ = nullptr;
-	QLineEdit *token_ = nullptr;
+	QWidget *tokenRow_ = nullptr;
 	QLabel *tokenStatus_ = nullptr;
 	bool tokenSaved_ = false;
 };

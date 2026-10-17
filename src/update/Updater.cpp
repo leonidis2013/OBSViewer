@@ -301,7 +301,13 @@ Updater::CheckResult Updater::fetchReleases(const std::string &repo, const std::
 {
 	CheckResult result;
 	const std::string url = "https://api.github.com/repos/" + repo + "/releases?per_page=30";
-	const HttpResult http = httpGet(url, token, "application/vnd.github+json", cancel_);
+	HttpResult http = httpGet(url, token, "application/vnd.github+json", cancel_);
+	// The repository is public now; an old, expired token must not block updates.
+	if (!http.cancelled && !token.empty() && (http.status == 401 || http.status == 403)) {
+		http = httpGet(url, std::string(), "application/vnd.github+json", cancel_);
+		if (http.status == 200)
+			tokenRejected_ = true; // downloads go without it too
+	}
 	if (http.cancelled)
 		return result;
 	if (!http.error.empty() || http.status != 200) {
@@ -389,6 +395,8 @@ void Updater::download(const Release &release)
 void Updater::runDownload(Release release, std::string repo, std::string token)
 {
 	(void)repo;
+	if (tokenRejected_)
+		token.clear();
 	auto fail = [this](const QString &message) {
 		QMetaObject::invokeMethod(this, [this, message] { emit downloadFailed(message); }, Qt::QueuedConnection);
 	};
@@ -403,7 +411,9 @@ void Updater::runDownload(Release release, std::string repo, std::string token)
 	std::string expected = pkg->sha256;
 	if (expected.empty()) {
 		if (const ReleaseAsset *sums = release.checksums()) {
-			const HttpResult http = httpGet(sums->apiUrl, token, "application/octet-stream", cancel_);
+			HttpResult http = httpGet(sums->apiUrl, token, "application/octet-stream", cancel_);
+			if (!http.cancelled && !token.empty() && (http.status == 401 || http.status == 403))
+				http = httpGet(sums->apiUrl, std::string(), "application/octet-stream", cancel_);
 			if (http.cancelled)
 				return;
 			if (http.error.empty() && http.status == 200)

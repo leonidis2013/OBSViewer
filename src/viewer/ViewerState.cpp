@@ -1,6 +1,8 @@
 #include "viewer/ViewerState.hpp"
 
 #include "audio/SourceLevels.hpp"
+#include "core/Settings.hpp"
+#include "viewer/Layouts.hpp"
 
 #include <obs-frontend-api.h>
 
@@ -136,24 +138,30 @@ obs_source_t *ViewerState::createLabel(const std::string &text, uint32_t canvasH
 	return label;
 }
 
-int ViewerState::wantedShownCount() const
+std::vector<int> ViewerState::wantedShown() const
 {
-	int count = 0;
+	std::vector<int> scenes;
 	for (const auto &kv : views_) {
-		if (kv.second < 0)
-			return static_cast<int>(sceneWeak_.size());
-		count = std::max(count, kv.second);
+		const auto it = viewMapsMain_.find(layoutById(kv.second).id);
+		if (it == viewMapsMain_.end())
+			continue;
+		for (int i : it->second)
+			if (i >= 0 && std::find(scenes.begin(), scenes.end(), i) == scenes.end())
+				scenes.push_back(i);
 	}
-	return std::min(count, static_cast<int>(sceneWeak_.size()));
+	std::sort(scenes.begin(), scenes.end());
+	return scenes;
 }
 
-void ViewerState::applyShowing(int count)
+void ViewerState::applyShowing(const std::vector<int> &scenes)
 {
 	// Mark the new set first, then unmark the old one, so a scene that stays on
 	// screen never drops to "not showing" for a moment (that would restart media
 	// sources set to restart when shown).
 	std::vector<obs_weak_source_t *> next;
-	for (int i = 0; i < count && static_cast<size_t>(i) < sceneWeak_.size(); ++i) {
+	for (int i : scenes) {
+		if (i < 0 || static_cast<size_t>(i) >= sceneWeak_.size())
+			continue;
 		obs_source_t *source = obs_weak_source_get_source(sceneWeak_[static_cast<size_t>(i)]);
 		if (!source)
 			continue;
@@ -170,7 +178,63 @@ void ViewerState::applyShowing(int count)
 		obs_weak_source_release(weak);
 	}
 	shown_ = std::move(next);
-	shownCount_ = count;
+	shownScenes_ = scenes;
+}
+
+void ViewerState::rebuildViewMaps()
+{
+	const Settings &st = Settings::get();
+	const int n = static_cast<int>(sceneNames_.size());
+	auto indexOf = [this](const std::string &name) {
+		for (size_t i = 0; i < sceneNames_.size(); ++i)
+			if (sceneNames_[i] == name)
+				return static_cast<int>(i);
+		return -1;
+	};
+	std::map<std::string, std::vector<int>> maps;
+	for (const LayoutInfo &l : allLayouts()) {
+		std::vector<int> &m = maps[l.id];
+		if (l.fixedScenes < 0) {
+			for (int i = 0; i < n; ++i)
+				if (std::find(st.dynamicHidden.begin(), st.dynamicHidden.end(), sceneNames_[static_cast<size_t>(i)]) ==
+				    st.dynamicHidden.end())
+					m.push_back(i);
+			continue;
+		}
+		const auto it = st.viewScenes.find(l.id);
+		for (int slot = 0; slot < l.fixedScenes; ++slot) {
+			std::string name;
+			if (it != st.viewScenes.end() && static_cast<size_t>(slot) < it->second.size())
+				name = it->second[static_cast<size_t>(slot)];
+			m.push_back(name.empty() ? (slot < n ? slot : -1) : indexOf(name));
+		}
+	}
+	viewMapsMain_ = maps;
+	auto shared = std::make_shared<const std::map<std::string, std::vector<int>>>(std::move(maps));
+	{
+		std::lock_guard<std::mutex> lock(mutex_);
+		viewMaps_ = std::move(shared);
+	}
+}
+
+std::vector<int> ViewerState::viewMap(const std::string &layoutId) const
+{
+	const auto it = viewMapsMain_.find(layoutById(layoutId).id);
+	return it == viewMapsMain_.end() ? std::vector<int>() : it->second;
+}
+
+void ViewerState::updateViewScenes()
+{
+	rebuildViewMaps();
+	const std::vector<int> wanted = wantedShown();
+	if (wanted != shownScenes_)
+		applyShowing(wanted);
+}
+
+void ViewerState::setSafeAreas(bool on)
+{
+	std::lock_guard<std::mutex> lock(mutex_);
+	safeAreas_ = on;
 }
 
 void ViewerState::refresh()
@@ -333,7 +397,8 @@ void ViewerState::refresh()
 	releaseAll(oldWeak);
 
 	if (listChanged) {
-		applyShowing(wantedShownCount());
+		rebuildViewMaps();
+		applyShowing(wantedShown());
 		watchScenes();
 	}
 
@@ -342,19 +407,19 @@ void ViewerState::refresh()
 	obs_frontend_source_list_free(&list);
 }
 
-void ViewerState::setView(const void *view, int sceneLimit)
+void ViewerState::setView(const void *view, const std::string &layoutId)
 {
-	views_[view] = sceneLimit;
-	const int wanted = wantedShownCount();
-	if (wanted != shownCount_)
+	views_[view] = layoutId;
+	const std::vector<int> wanted = wantedShown();
+	if (wanted != shownScenes_)
 		applyShowing(wanted);
 }
 
 void ViewerState::removeView(const void *view)
 {
 	views_.erase(view);
-	const int wanted = wantedShownCount();
-	if (wanted != shownCount_)
+	const std::vector<int> wanted = wantedShown();
+	if (wanted != shownScenes_)
 		applyShowing(wanted);
 }
 
@@ -424,7 +489,7 @@ void ViewerState::setShowLabels(bool show)
 
 void ViewerState::clear()
 {
-	applyShowing(0);
+	applyShowing({});
 	unwatchScenes();
 	audioDirty_ = true;
 
@@ -488,6 +553,8 @@ ViewerState::Snapshot ViewerState::acquire()
 	snap.recording = recording_;
 	snap.recordingPaused = recordingPaused_;
 	snap.showLabels = showLabels_;
+	snap.safeAreas = safeAreas_;
+	snap.viewMaps = viewMaps_;
 	snap.baseWidth = baseWidth_;
 	snap.baseHeight = baseHeight_;
 	return snap;

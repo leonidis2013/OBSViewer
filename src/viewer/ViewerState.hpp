@@ -47,6 +47,10 @@ public:
 		bool recording = false;
 		bool recordingPaused = false;
 		bool showLabels = true;
+		bool safeAreas = false;
+		// Layout id → scene index for each scene view (-1 = empty view). For the
+		// Dynamic layout: the scenes it shows, in order.
+		std::shared_ptr<const std::map<std::string, std::vector<int>>> viewMaps;
 		uint32_t baseWidth = 1920;
 		uint32_t baseHeight = 1080;
 	};
@@ -62,11 +66,16 @@ public:
 	void poll() { refresh(); }
 	// A view (dock or window) became visible / hidden. Scenes are marked as
 	// "showing" while at least one view is visible, like OBS's own Multiview.
-	// A view (dock or window) is visible showing `sceneLimit` scene tiles (-1 =
-	// every scene). Only scenes some visible view actually shows are marked
-	// "showing" (so their sources run), like OBS's own Multiview.
-	void setView(const void *view, int sceneLimit);
+	// A view (dock or window) is visible with this layout. Only scenes some
+	// visible view actually shows are marked "showing" (so their sources run),
+	// like OBS's own Multiview.
+	void setView(const void *view, const std::string &layoutId);
 	void removeView(const void *view);
+	// Re-reads Settings ▸ which scene each view shows.
+	void updateViewScenes();
+	void setSafeAreas(bool on);
+	// Scene index for each scene view of a layout (see Snapshot::viewMaps). Main thread.
+	std::vector<int> viewMap(const std::string &layoutId) const;
 	void setShowLabels(bool show);
 	void setShowTileMeters(bool show);
 
@@ -96,8 +105,9 @@ private:
 		obs_source_t *label = nullptr;
 	};
 
-	void applyShowing(int count); // main thread, unlocked; marks the first `count` scenes
-	int wantedShownCount() const;
+	void applyShowing(const std::vector<int> &scenes); // main thread, unlocked
+	std::vector<int> wantedShown() const;
+	void rebuildViewMaps(); // main thread; swaps viewMaps_ under the lock
 	void watchScenes();
 	void unwatchScenes();
 	static void onSceneItemsChanged(void *param, calldata_t *data);
@@ -128,8 +138,11 @@ private:
 	bool haveProgramNames_ = false;
 	uint32_t labelHeight_ = 0; // canvas height the labels were built for
 	uint32_t baseWidthMain_ = 1920;
-	std::map<const void *, int> views_;
-	int shownCount_ = 0; // scenes currently marked showing (first N in the list)
+	std::map<const void *, std::string> views_; // visible view → layout id
+	std::vector<int> shownScenes_; // scene indices currently marked showing
+	std::shared_ptr<const std::map<std::string, std::vector<int>>> viewMaps_; // guarded by mutex_
+	std::map<std::string, std::vector<int>> viewMapsMain_;                     // main-thread copy
+	bool safeAreas_ = false;
 	std::vector<obs_weak_source_t *> watched_; // scenes whose item signals we listen to
 	std::atomic<bool> audioDirty_{true};
 	int pollsSinceAudio_ = 0;

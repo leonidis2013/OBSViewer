@@ -5,6 +5,8 @@
 
 #include <plugin-support.h>
 
+#include <algorithm>
+
 namespace obsviewer {
 
 namespace {
@@ -55,6 +57,39 @@ void Settings::load()
 		clickAction = defaults.clickAction;
 	showSidebar = getBool(data, "show_sidebar", defaults.showSidebar);
 	masterBusEmbedded = getBool(data, "master_bus_embedded", defaults.masterBusEmbedded);
+	warnFrozen = getBool(data, "warn_frozen", defaults.warnFrozen);
+	safeAreas = getBool(data, "safe_areas", defaults.safeAreas);
+	showClock = getBool(data, "show_clock", defaults.showClock);
+	countdownOn = getBool(data, "countdown_on", defaults.countdownOn);
+	if (obs_data_has_user_value(data, "countdown_minutes"))
+		countdownMinutes = std::clamp(static_cast<int>(obs_data_get_int(data, "countdown_minutes")), 0, 24 * 60 - 1);
+	countdownLabel = getString(data, "countdown_label", defaults.countdownLabel);
+
+	viewScenes.clear();
+	if (obs_data_t *vs = obs_data_get_obj(data, "view_scenes")) {
+		for (obs_data_item_t *item = obs_data_first(vs); item; obs_data_item_next(&item)) {
+			std::vector<std::string> names;
+			if (obs_data_array_t *arr = obs_data_item_get_array(item)) {
+				for (size_t i = 0; i < obs_data_array_count(arr); ++i) {
+					obs_data_t *e = obs_data_array_item(arr, i);
+					names.emplace_back(obs_data_get_string(e, "scene"));
+					obs_data_release(e);
+				}
+				obs_data_array_release(arr);
+			}
+			viewScenes[obs_data_item_get_name(item)] = std::move(names);
+		}
+		obs_data_release(vs);
+	}
+	dynamicHidden.clear();
+	if (obs_data_array_t *arr = obs_data_get_array(data, "dynamic_hidden")) {
+		for (size_t i = 0; i < obs_data_array_count(arr); ++i) {
+			obs_data_t *e = obs_data_array_item(arr, i);
+			dynamicHidden.emplace_back(obs_data_get_string(e, "scene"));
+			obs_data_release(e);
+		}
+		obs_data_array_release(arr);
+	}
 	alarms = getBool(data, "alarms", defaults.alarms);
 	tileMeters = getBool(data, "tile_meters", defaults.tileMeters);
 	loudnessPreset = obs_data_has_user_value(data, "loudness_preset")
@@ -112,6 +147,35 @@ void Settings::save() const
 	obs_data_set_int(data, "click_action", clickAction);
 	obs_data_set_bool(data, "show_sidebar", showSidebar);
 	obs_data_set_bool(data, "master_bus_embedded", masterBusEmbedded);
+	obs_data_set_bool(data, "warn_frozen", warnFrozen);
+	obs_data_set_bool(data, "safe_areas", safeAreas);
+	obs_data_set_bool(data, "show_clock", showClock);
+	obs_data_set_bool(data, "countdown_on", countdownOn);
+	obs_data_set_int(data, "countdown_minutes", countdownMinutes);
+	obs_data_set_string(data, "countdown_label", countdownLabel.c_str());
+
+	auto toArray = [](const std::vector<std::string> &names) {
+		obs_data_array_t *arr = obs_data_array_create();
+		for (const auto &n : names) {
+			obs_data_t *e = obs_data_create();
+			obs_data_set_string(e, "scene", n.c_str());
+			obs_data_array_push_back(arr, e);
+			obs_data_release(e);
+		}
+		return arr;
+	};
+	obs_data_t *vs = obs_data_create();
+	for (const auto &[layout, names] : viewScenes) {
+		obs_data_array_t *arr = toArray(names);
+		obs_data_set_array(vs, layout.c_str(), arr);
+		obs_data_array_release(arr);
+	}
+	obs_data_set_obj(data, "view_scenes", vs);
+	obs_data_release(vs);
+	obs_data_array_t *hidden = toArray(dynamicHidden);
+	obs_data_set_array(data, "dynamic_hidden", hidden);
+	obs_data_array_release(hidden);
+
 	obs_data_set_bool(data, "alarms", alarms);
 	obs_data_set_bool(data, "tile_meters", tileMeters);
 	obs_data_set_int(data, "loudness_preset", loudnessPreset);

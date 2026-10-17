@@ -31,7 +31,9 @@ signals:
 	// kind: TileKind as int; sceneIndex for scene tiles, else -1
 	void tileClicked(int kind, int sceneIndex);
 	void tileDoubleClicked(int kind, int sceneIndex);
-	void contextMenuRequested(const QPoint &globalPos);
+	// slot: position of the scene view under the mouse (-1 if not a scene view),
+	// scene: the scene it shows (-1 if none).
+	void contextMenuRequested(const QPoint &globalPos, int slot, int scene);
 
 protected:
 	void paintEvent(QPaintEvent *event) override;
@@ -45,7 +47,7 @@ protected:
 private:
 	void createDisplay();
 	void destroyDisplay();
-	bool tileAt(const QPointF &pos, int &kind, int &sceneIndex) const;
+	bool tileAt(const QPointF &pos, int &kind, int &sceneIndex, int &slot) const;
 	QSize pixelSize() const;
 	static void draw(void *param, uint32_t cx, uint32_t cy);
 

@@ -116,6 +116,8 @@ target_sources(
     src/plugin-main.cpp
     src/App.cpp
     src/App.hpp
+    src/Hotkeys.cpp
+    src/Hotkeys.hpp
     src/audio/ProgramLoudness.cpp
     src/audio/ProgramLoudness.hpp
     src/audio/SourceLevels.cpp
@@ -133,6 +135,8 @@ target_sources(
     src/core/History.hpp
     src/metrics/Metrics.cpp
     src/metrics/Metrics.hpp
+    src/metrics/PictureMonitor.cpp
+    src/metrics/PictureMonitor.hpp
     src/core/Settings.cpp
     src/core/Settings.hpp
     src/core/Version.cpp

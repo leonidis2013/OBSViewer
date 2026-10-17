@@ -35,7 +35,7 @@ protected:
 	void changeEvent(QEvent *event) override;
 
 private:
-	void showContextMenu(const QPoint &globalPos);
+	void showContextMenu(const QPoint &globalPos, int slot, int scene);
 	void pickLayout(const std::string &id);
 	void saveWindowGeometry();
 	void restoreWindowGeometry();

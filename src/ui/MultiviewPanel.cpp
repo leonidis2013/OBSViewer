@@ -140,6 +140,7 @@ void MultiviewPanel::applySettings()
 {
 	const Settings &s = Settings::get();
 	side_->setVisible(s.showSidebar);
+	side_->applySettings();
 	if (!s.masterBusEmbedded)
 		setMasterBusVisible(false);
 }

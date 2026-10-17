@@ -24,8 +24,10 @@ enum class MenuContext { Dock, Window, Fullscreen };
 
 // The right-click menu for the dock and the viewer window. Every action runs
 // after the menu closes. `onLayout` is called with the picked layout id.
+// slot / scene: the scene view that was right-clicked (its position, and the
+// scene it shows), or -1; adds "This View Shows" / hide-scene items.
 void buildViewerMenu(QMenu &menu, const std::string &layoutId, const std::function<void(const std::string &)> &onLayout,
-		     MenuContext context);
+		     MenuContext context, int slot = -1, int scene = -1);
 
 // A long-lived "pick a screen" menu for the Tools menu and the dock toolbar.
 // On macOS, adding or deleting items while a native menu is opening makes clicks

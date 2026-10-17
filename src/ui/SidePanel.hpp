@@ -19,6 +19,7 @@ class AudioMeterWidget;
 class NetworkStats;
 class StatLines;
 class LoudnessHistory;
+class ClockWidget;
 
 // Small square header button with a drawn icon (settings, fullscreen, close…).
 class IconButton : public QAbstractButton {
@@ -51,6 +52,8 @@ public:
 	void setCompact(bool compact);
 	// Adds an icon to the header row (right-aligned, in call order).
 	IconButton *addHeaderButton(IconButton::Icon icon, const QString &tip, std::function<void()> onClick);
+	// Clock visibility / countdown from Settings.
+	void applySettings();
 
 protected:
 	void paintEvent(QPaintEvent *event) override;
@@ -70,6 +73,8 @@ private:
 	HealthButton *health_ = nullptr;
 	HealthButton *perf_ = nullptr;
 	QStackedWidget *stack_ = nullptr;
+	Section *clockSection_ = nullptr;
+	ClockWidget *clock_ = nullptr;
 	Section *streamSection_ = nullptr;
 	Section *recordSection_ = nullptr;
 	Section *audioSection_ = nullptr;

@@ -6,6 +6,8 @@
 #include "viewer/Layouts.hpp"
 
 #include <QActionGroup>
+
+#include <algorithm>
 #include <QGuiApplication>
 #include <QPointer>
 #include <QScreen>
@@ -86,11 +88,103 @@ void addSceneActions(QMenu *menu, int action)
 
 } // namespace
 
+namespace {
+
+void saveAndApply()
+{
+	Settings::get().save();
+	App::get().applySettings();
+}
+
+// "This View Shows ▸" for a fixed layout, or hide / unhide for Dynamic.
+void addViewSceneActions(QMenu &menu, const LayoutInfo &layout, int slot, int scene)
+{
+	const ViewerState &state = ViewerState::get();
+	Settings &st = Settings::get();
+	if (layout.fixedScenes >= 0) {
+		if (slot < 0 || slot >= layout.fixedScenes)
+			return;
+		std::vector<std::string> names = st.viewScenes[layout.id];
+		const std::string current = static_cast<size_t>(slot) < names.size() ? names[static_cast<size_t>(slot)] : "";
+		QMenu *sub = menu.addMenu(QStringLiteral("This View Shows"));
+		auto *group = new QActionGroup(sub);
+		const QString autoName = slot < state.sceneCount() ? QString::fromStdString(state.sceneName(slot)) : QStringLiteral("nothing");
+		QAction *a = sub->addAction(QStringLiteral("Automatic (scene %1 · %2)").arg(slot + 1).arg(autoName));
+		a->setCheckable(true);
+		a->setChecked(current.empty());
+		group->addAction(a);
+		const std::string id = layout.id;
+		QObject::connect(a, &QAction::triggered, sub, [id, slot] {
+			later([id, slot] {
+				auto &v = Settings::get().viewScenes[id];
+				if (static_cast<size_t>(slot) < v.size())
+					v[static_cast<size_t>(slot)].clear();
+				saveAndApply();
+			});
+		});
+		sub->addSeparator();
+		for (int i = 0; i < state.sceneCount(); ++i) {
+			const std::string name = state.sceneName(i);
+			QAction *s = sub->addAction(QStringLiteral("%1   %2").arg(i + 1).arg(QString::fromStdString(name)));
+			s->setCheckable(true);
+			s->setChecked(!current.empty() && current == name);
+			group->addAction(s);
+			QObject::connect(s, &QAction::triggered, sub, [id, slot, name] {
+				later([id, slot, name] {
+					auto &v = Settings::get().viewScenes[id];
+					if (v.size() <= static_cast<size_t>(slot))
+						v.resize(static_cast<size_t>(slot) + 1);
+					v[static_cast<size_t>(slot)] = name;
+					saveAndApply();
+				});
+			});
+		}
+		return;
+	}
+
+	// Dynamic: hide the clicked scene, or bring hidden ones back.
+	if (scene >= 0) {
+		const std::string name = state.sceneName(scene);
+		QObject::connect(menu.addAction(QStringLiteral("Hide “%1” From This Layout").arg(QString::fromStdString(name))),
+				 &QAction::triggered, &menu, [name] {
+					 later([name] {
+						 auto &h = Settings::get().dynamicHidden;
+						 if (std::find(h.begin(), h.end(), name) == h.end())
+							 h.push_back(name);
+						 saveAndApply();
+					 });
+				 });
+	}
+	if (!st.dynamicHidden.empty()) {
+		QMenu *sub = menu.addMenu(QStringLiteral("Hidden Scenes"));
+		for (const std::string &name : st.dynamicHidden) {
+			QObject::connect(sub->addAction(QStringLiteral("Show “%1”").arg(QString::fromStdString(name))),
+					 &QAction::triggered, sub, [name] {
+						 later([name] {
+							 auto &h = Settings::get().dynamicHidden;
+							 h.erase(std::remove(h.begin(), h.end(), name), h.end());
+							 saveAndApply();
+						 });
+					 });
+		}
+		sub->addSeparator();
+		QObject::connect(sub->addAction(QStringLiteral("Show All Scenes")), &QAction::triggered, sub, [] {
+			later([] {
+				Settings::get().dynamicHidden.clear();
+				saveAndApply();
+			});
+		});
+	}
+}
+
+} // namespace
+
 void buildViewerMenu(QMenu &menu, const std::string &layoutId, const std::function<void(const std::string &)> &onLayout,
-		     MenuContext context)
+		     MenuContext context, int slot, int scene)
 {
 	QMenu *layouts = menu.addMenu(QStringLiteral("Layout"));
 	addLayoutActions(layouts, layoutId, [onLayout](const std::string &id) { later([onLayout, id] { onLayout(id); }); });
+	addViewSceneActions(menu, layoutById(layoutId), slot, scene);
 
 	if (obs_frontend_preview_program_mode_active()) {
 		addSceneActions(menu.addMenu(QStringLiteral("Send to Preview")), Settings::ClickPreview);
