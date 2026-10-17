@@ -110,11 +110,20 @@ void App::handleFrontendEvent(enum obs_frontend_event event)
 		});
 		break;
 
+	case OBS_FRONTEND_EVENT_STUDIO_MODE_ENABLED:
+	case OBS_FRONTEND_EVENT_STUDIO_MODE_DISABLED:
+		// OBS turns its preview back on for Studio Mode; re-apply our choice.
+		QTimer::singleShot(0, this, [this] {
+			restoreObsPreview();
+			updateObsPreview();
+		});
+		if (!exiting_)
+			ViewerState::get().refresh();
+		break;
+
 	case OBS_FRONTEND_EVENT_SCENE_CHANGED:
 	case OBS_FRONTEND_EVENT_PREVIEW_SCENE_CHANGED:
 	case OBS_FRONTEND_EVENT_SCENE_LIST_CHANGED:
-	case OBS_FRONTEND_EVENT_STUDIO_MODE_ENABLED:
-	case OBS_FRONTEND_EVENT_STUDIO_MODE_DISABLED:
 	case OBS_FRONTEND_EVENT_STREAMING_STARTED:
 	case OBS_FRONTEND_EVENT_STREAMING_STOPPED:
 	case OBS_FRONTEND_EVENT_RECORDING_STARTED:
@@ -139,6 +148,7 @@ void App::handleFrontendEvent(enum obs_frontend_event event)
 	case OBS_FRONTEND_EVENT_SCRIPTING_SHUTDOWN:
 	case OBS_FRONTEND_EVENT_EXIT:
 		Hotkeys::get().save();
+		restoreObsPreview(); // OBS remembers its preview setting for next time
 		exiting_ = true;
 		Metrics::get().stop();
 		if (masterBus_)
@@ -209,8 +219,58 @@ ViewerWindow *App::ensureViewer()
 	return viewer_;
 }
 
+void App::updateObsPreview()
+{
+	const bool want = Settings::get().hideObsPreview && viewer_ && viewer_->isVisible() && !exiting_;
+	if (want == obsPreviewHidden_)
+		return;
+	if (!want) {
+		restoreObsPreview();
+		return;
+	}
+	auto *main = static_cast<QMainWindow *>(obs_frontend_get_main_window());
+	if (!main)
+		return;
+	if (obs_frontend_preview_program_mode_active()) {
+		// Studio Mode keeps OBS's preview on by design; hide its display only.
+		// (OBS's Program view in Studio Mode can't be turned off from a plugin.)
+		if (QMetaObject::invokeMethod(main, "EnablePreviewDisplay", Qt::DirectConnection, Q_ARG(bool, false))) {
+			obsPreviewHidden_ = true;
+			obsPreviewStudio_ = true;
+			obs_log(LOG_INFO, "OBS preview: display hidden while the viewer is open (Studio Mode)");
+		}
+		return;
+	}
+	if (!obs_frontend_preview_enabled())
+		return; // already off; nothing to undo later
+	// Same as unticking "Enable Preview" in OBS, so OBS's own state stays right.
+	if (QMetaObject::invokeMethod(main, "DisablePreview", Qt::DirectConnection)) {
+		obsPreviewHidden_ = true;
+		obsPreviewStudio_ = false;
+		obs_log(LOG_INFO, "OBS preview: off while the viewer is open");
+	} else {
+		obs_log(LOG_WARNING, "OBS preview: this OBS version doesn't allow turning it off from a plugin");
+	}
+}
+
+void App::restoreObsPreview()
+{
+	if (!obsPreviewHidden_)
+		return;
+	obsPreviewHidden_ = false;
+	auto *main = static_cast<QMainWindow *>(obs_frontend_get_main_window());
+	if (!main)
+		return;
+	if (obsPreviewStudio_)
+		QMetaObject::invokeMethod(main, "EnablePreviewDisplay", Qt::DirectConnection, Q_ARG(bool, true));
+	else
+		QMetaObject::invokeMethod(main, "EnablePreview", Qt::DirectConnection);
+	obs_log(LOG_INFO, "OBS preview: back on");
+}
+
 void App::updateDockPause()
 {
+	updateObsPreview();
 	if (!dock_)
 		return;
 	const bool viewerShowing = viewer_ && viewer_->isVisible();
@@ -415,6 +475,7 @@ void App::applySettings()
 	}
 	if (viewer_)
 		viewer_->applySettings();
+	updateObsPreview();
 }
 
 } // namespace obsviewer

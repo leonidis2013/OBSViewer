@@ -67,8 +67,13 @@ private:
 	ViewerWindow *ensureViewer();
 	// Where an embedded master bus goes for a request from `from`.
 	MultiviewPanel *masterBusHost(QWidget *from);
-	// Pauses the dock's multiview while the viewer window is open.
+	// Pauses the dock's multiview while the viewer window is open, and turns
+	// OBS's own preview off then (Settings), so the picture isn't drawn twice.
 	void updateDockPause();
+	void updateObsPreview();
+	void restoreObsPreview();
+	bool obsPreviewHidden_ = false;   // we turned OBS's preview off
+	bool obsPreviewStudio_ = false;   // … while in Studio Mode (only the display was hidden)
 	bool dockAnyway_ = false;
 
 	QPointer<ViewerDock> dock_;

@@ -22,6 +22,7 @@ struct Settings {
 	bool masterBusEmbedded = true; // master bus opens next to the side bar (else in its own window)
 	bool warnFrozen = true;        // health warns when Program hasn't changed for a minute while live
 	bool safeAreas = false;        // action-safe / title-safe guides on Program and Preview
+	bool hideObsPreview = true;    // turn OBS's own preview off while the viewer window is open
 
 	// Clock and countdown in the side bar.
 	bool showClock = true;

@@ -264,6 +264,15 @@ only for a Problem.
   on/off, show master bus. Saved in `hotkeys.json` on exit. Stream Deck can trigger
   them with its Hotkey action.
 - **Recording:** the side bar shows the file being written and its size.
+- **OBS preview off (0.7.1):** while the viewer window is visible (setting
+  `hide_obs_preview`, default on), OBSViewer invokes OBS's own `DisablePreview` slot
+  (same as unticking Enable Preview, so OBS's state stays consistent), or in Studio
+  Mode `EnablePreviewDisplay(false)` (Studio Mode keeps the preview enabled; its
+  Program view can't be reached). Restored with `EnablePreview` /
+  `EnablePreviewDisplay(true)` when the window closes, on Studio Mode changes
+  (re-applied), and on exit before OBS saves its settings. Only what OBSViewer turned
+  off is turned back on. (`obs_frontend_set_preview_enabled` isn't used: it doesn't
+  update OBS's own flag, so it can't turn the preview back on.)
 
 ## 5. Settings
 
@@ -282,6 +291,7 @@ Stored as JSON in `~/Library/Application Support/obs-studio/plugin_config/obsvie
 | `alarms` | `true` | Flash the health light on a Problem. |
 | `master_bus_embedded` | `true` | Master bus opens next to the side bar (else in its own window). |
 | `safe_areas` | `false` | Safe-area guides on Program and Preview. |
+| `hide_obs_preview` | `true` | Turn OBS's own preview off while the viewer window is open. |
 | `warn_frozen` | `true` | Health warns when Program hasn't changed for 60 s while live. |
 | `show_clock` | `true` | Clock section in the side bar. |
 | `countdown_on` / `countdown_minutes` / `countdown_label` | off / 630 (10:30) / "Service starts" | Daily countdown. |

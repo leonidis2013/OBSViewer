@@ -59,6 +59,7 @@ void Settings::load()
 	masterBusEmbedded = getBool(data, "master_bus_embedded", defaults.masterBusEmbedded);
 	warnFrozen = getBool(data, "warn_frozen", defaults.warnFrozen);
 	safeAreas = getBool(data, "safe_areas", defaults.safeAreas);
+	hideObsPreview = getBool(data, "hide_obs_preview", defaults.hideObsPreview);
 	showClock = getBool(data, "show_clock", defaults.showClock);
 	countdownOn = getBool(data, "countdown_on", defaults.countdownOn);
 	if (obs_data_has_user_value(data, "countdown_minutes"))
@@ -149,6 +150,7 @@ void Settings::save() const
 	obs_data_set_bool(data, "master_bus_embedded", masterBusEmbedded);
 	obs_data_set_bool(data, "warn_frozen", warnFrozen);
 	obs_data_set_bool(data, "safe_areas", safeAreas);
+	obs_data_set_bool(data, "hide_obs_preview", hideObsPreview);
 	obs_data_set_bool(data, "show_clock", showClock);
 	obs_data_set_bool(data, "countdown_on", countdownOn);
 	obs_data_set_int(data, "countdown_minutes", countdownMinutes);

@@ -83,6 +83,10 @@ SettingsDialog::SettingsDialog(QWidget *parent) : QDialog(parent)
 	viewForm->addRow(QString(), busEmbedded_);
 	safeAreas_ = new QCheckBox(tr("Show safe-area guides on Program and Preview"), viewGroup);
 	viewForm->addRow(QString(), safeAreas_);
+	hideObsPreview_ = new QCheckBox(tr("Turn off OBS's own preview while the OBSViewer window is open"), viewGroup);
+	hideObsPreview_->setToolTip(tr("Saves graphics power: the picture isn't drawn twice. It comes back when the window "
+				       "closes. In Studio Mode OBS's Program view stays on."));
+	viewForm->addRow(QString(), hideObsPreview_);
 	warnFrozen_ = new QCheckBox(tr("Warn when Program hasn't changed for a minute while live"), viewGroup);
 	warnFrozen_->setToolTip(tr("A black Program picture is always reported."));
 	viewForm->addRow(QString(), warnFrozen_);
@@ -229,6 +233,7 @@ void SettingsDialog::load()
 	alarms_->setChecked(s.alarms);
 	busEmbedded_->setChecked(s.masterBusEmbedded);
 	safeAreas_->setChecked(s.safeAreas);
+	hideObsPreview_->setChecked(s.hideObsPreview);
 	warnFrozen_->setChecked(s.warnFrozen);
 	showClock_->setChecked(s.showClock);
 	countdownOn_->setChecked(s.countdownOn);
@@ -266,6 +271,7 @@ void SettingsDialog::apply()
 	s.alarms = alarms_->isChecked();
 	s.masterBusEmbedded = busEmbedded_->isChecked();
 	s.safeAreas = safeAreas_->isChecked();
+	s.hideObsPreview = hideObsPreview_->isChecked();
 	s.warnFrozen = warnFrozen_->isChecked();
 	s.showClock = showClock_->isChecked();
 	s.countdownOn = countdownOn_->isChecked();

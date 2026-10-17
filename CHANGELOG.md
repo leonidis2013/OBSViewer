@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.7.1] — 2026-10-16
+
+- **OBS's own preview turns off while the OBSViewer window is open** (windowed or fullscreen), so the same picture isn't drawn twice and more graphics power is left for streaming. It comes back on when the window closes and before OBS quits. In Studio Mode the preview half is hidden; OBS's Program view there can't be turned off by a plugin. Turn this off in Settings ▸ Multiview if you want both.
+
+
 ## [0.7.0] — 2026-10-16
 
 The remaining planned utilities.
