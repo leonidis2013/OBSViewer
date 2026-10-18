@@ -1,5 +1,7 @@
 #pragma once
 
+#include <QPointer>
+#include <QScreen>
 #include <QWidget>
 
 #include <string>
@@ -40,11 +42,15 @@ private:
 	void saveWindowGeometry();
 	void restoreWindowGeometry();
 	void updateModeButton();
+	void moveThenFullscreen();
 
 	MultiviewPanel *panel_ = nullptr;
 	ViewerDisplay *display_ = nullptr;
 	IconButton *modeButton_ = nullptr;
 	bool fullscreen_ = false;
+	QPointer<QScreen> target_; // screen fullscreen was asked for
+	int fullscreenTries_ = 0;
+	bool pendingFullscreen_ = false; // moving to a screen before going fullscreen
 };
 
 } // namespace obsviewer

@@ -318,18 +318,14 @@ void App::openFullscreen(QScreen *screen)
 	s.windowScreen = screen->name().toStdString();
 	s.save();
 
-	// Already fullscreen on another screen: recreate rather than move, because
-	// macOS fullscreen Spaces don't move cleanly between screens.
-	if (viewer_ && viewer_->fullscreen() && viewer_->screen() != screen) {
-		viewer_->close();
-		viewer_ = nullptr;
-	}
+	// The window moves itself: out of fullscreen if needed, onto the screen,
+	// then into fullscreen there (see ViewerWindow::showFullscreenOn).
 	ensureViewer()->showFullscreenOn(screen);
 	updateDockPause();
 
 	// Report what macOS actually did, so a log shows whether fullscreen took effect.
 	QPointer<ViewerWindow> window = viewer_;
-	QTimer::singleShot(2000, this, [window] {
+	QTimer::singleShot(3500, this, [window] {
 		if (!window)
 			return;
 		const QRect wg = window->geometry();

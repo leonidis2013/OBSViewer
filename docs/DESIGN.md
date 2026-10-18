@@ -160,8 +160,14 @@ Dynamic once (`settings_version` < 2).
   both. Tools ▸ OBSViewer ▸ Open Window / Open Fullscreen ▸ *screen* / Close Window.
   Opening one mode switches the existing window. Header icons: Settings,
   Fullscreen ↔ Windowed, Close. Esc leaves fullscreen; ⌘W closes. The windowed size
-  and position, the fullscreen screen and the layout are remembered. Moving
-  fullscreen to another screen recreates the window (macOS Spaces don't move cleanly).
+  and position, the fullscreen screen and the layout are remembered.
+- **Fullscreen on a chosen screen (0.7.3):** macOS enters fullscreen on the screen
+  the window is on, and a move requested in the same moment hasn't happened yet. So
+  the window is first shown as a normal window centred on the target screen, then
+  `showFullScreen()` once `screen()` reports the target (polled every 100 ms, up to
+  2 s). Already fullscreen elsewhere → `showNormal()`, 0.9 s for the exit animation,
+  then the same steps. Window-state changes on the way are ignored; Esc or choosing
+  Window cancels.
 - **Controls dock (0.7.2)**: Docks ▸ OBSViewer Controls — viewer state (closed /
   windowed / fullscreen + screen), Window · Fullscreen (toggle; arrow = screen menu) ·
   Close, the window layout, Bus ON/OFF with plugin count and gain reduction, Open Bus,

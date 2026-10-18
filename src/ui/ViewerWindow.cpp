@@ -21,6 +21,10 @@
 #include <QVBoxLayout>
 #include <QWindow>
 
+#include <algorithm>
+#include <functional>
+#include <memory>
+
 namespace obsviewer {
 
 // A normal titled window, switched to fullscreen when asked (macOS refuses to
@@ -134,6 +138,7 @@ void ViewerWindow::restoreWindowGeometry()
 
 void ViewerWindow::showWindowed()
 {
+	pendingFullscreen_ = false; // cancels a fullscreen move in progress
 	const bool wasFullscreen = fullscreen_ || isFullScreen();
 	if (!wasFullscreen && isVisible()) {
 		raise();
@@ -164,23 +169,85 @@ void ViewerWindow::showFullscreenOn(QScreen *screen)
 {
 	if (!screen)
 		return;
-	if (!fullscreen_ && isVisible())
+	if (!fullscreen_ && !isFullScreen() && isVisible())
 		saveWindowGeometry();
+	target_ = screen;
 	fullscreen_ = true;
+	pendingFullscreen_ = true; // window-state changes on the way don't count
 	updateModeButton();
 
-	if (!isVisible() || this->screen() != screen) {
-		// Place the window on the target screen first, then go fullscreen there.
-		setGeometry(screen->geometry());
-		winId();
-		if (QWindow *window = windowHandle())
-			window->setScreen(screen);
+	if (isFullScreen()) {
+		if (this->screen() == screen) {
+			pendingFullscreen_ = false;
+			raise();
+			activateWindow();
+			return;
+		}
+		// macOS fullscreen Spaces don't move between screens: leave fullscreen,
+		// let the animation finish, then move and go fullscreen again.
+		obs_log(LOG_INFO, "viewer: moving fullscreen to '%s'", screen->name().toUtf8().constData());
+		showNormal();
+		QPointer<ViewerWindow> self(this);
+		QTimer::singleShot(900, this, [self] {
+			if (self && self->pendingFullscreen_)
+				self->moveThenFullscreen();
+		});
+		return;
 	}
-	showFullScreen();
+	moveThenFullscreen();
+}
+
+void ViewerWindow::moveThenFullscreen()
+{
+	QScreen *screen = target_.data();
+	if (!screen)
+		return;
+	// macOS goes fullscreen on the screen the window is on, so first put a normal
+	// window in the middle of the chosen screen and show it there...
+	const QRect avail = screen->availableGeometry();
+	const QSize size(std::min(1280, avail.width() - 80), std::min(720, avail.height() - 80));
+	winId();
+	if (QWindow *window = windowHandle())
+		window->setScreen(screen);
+	setGeometry(QRect(avail.center() - QPoint(size.width() / 2, size.height() / 2), size));
+	if (!isVisible())
+		show();
 	raise();
-	activateWindow();
-	setFocus();
-	obs_log(LOG_INFO, "viewer: fullscreen on '%s'", screen->name().toUtf8().constData());
+
+	// ...then wait until macOS reports it there (up to ~2 s) before going fullscreen.
+	fullscreenTries_ = 0;
+	QPointer<ViewerWindow> self(this);
+	auto check = std::make_shared<std::function<void()>>();
+	*check = [self, check] {
+		if (!self || !self->pendingFullscreen_) { // cancelled (Esc, window chosen, closed)
+			*check = nullptr;
+			return;
+		}
+		QScreen *want = self->target_.data();
+		const bool there = want && self->screen() == want;
+		if (there || ++self->fullscreenTries_ > 20) {
+			if (!there)
+				obs_log(LOG_WARNING, "viewer: window didn't reach '%s'; going fullscreen where it is",
+					want ? want->name().toUtf8().constData() : "?");
+			self->pendingFullscreen_ = false;
+			self->showFullScreen();
+			self->raise();
+			self->activateWindow();
+			self->setFocus();
+			obs_log(LOG_INFO, "viewer: fullscreen on '%s'",
+				self->screen() ? self->screen()->name().toUtf8().constData() : "?");
+			*check = nullptr;
+			return;
+		}
+		QTimer::singleShot(100, self, [check] {
+			if (*check)
+				(*check)();
+		});
+	};
+	QTimer::singleShot(150, this, [check] {
+		if (*check)
+			(*check)();
+	});
 }
 
 void ViewerWindow::changeEvent(QEvent *event)
@@ -189,7 +256,7 @@ void ViewerWindow::changeEvent(QEvent *event)
 	if (event->type() == QEvent::WindowStateChange) {
 		// The green title-bar button also enters / leaves fullscreen.
 		const bool fs = isFullScreen();
-		if (fs != fullscreen_) {
+		if (!pendingFullscreen_ && fs != fullscreen_) {
 			fullscreen_ = fs;
 			updateModeButton();
 		}

@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.7.3] — 2026-10-18
+
+- **Fixed: fullscreen now opens on the screen you pick.** On Apple Silicon Macs it always went to the same screen. The viewer now moves to the chosen screen as a normal window, waits until macOS has it there, then goes fullscreen. Moving from one screen's fullscreen to another leaves fullscreen first, then re-enters it on the new screen.
+
+
 ## [0.7.2] — 2026-10-18
 
 - **New "OBSViewer Controls" dock** (Docks ▸ OBSViewer Controls): a small remote so you don't need the Tools menu. It shows whether the viewer is closed, windowed or fullscreen, with buttons for **Window**, **Fullscreen** (click again for a window; the arrow picks the screen) and **Close**, the window's **layout**, **Bus ON / OFF** with what the bus is doing, **Open Bus**, and **Settings…**.
