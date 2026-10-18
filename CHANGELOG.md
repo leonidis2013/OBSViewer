@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.7.2] — 2026-10-18
+
+- **New "OBSViewer Controls" dock** (Docks ▸ OBSViewer Controls): a small remote so you don't need the Tools menu. It shows whether the viewer is closed, windowed or fullscreen, with buttons for **Window**, **Fullscreen** (click again for a window; the arrow picks the screen) and **Close**, the window's **layout**, **Bus ON / OFF** with what the bus is doing, **Open Bus**, and **Settings…**.
+
+
 ## [0.7.1] — 2026-10-16
 
 - **OBS's own preview turns off while the OBSViewer window is open** (windowed or fullscreen), so the same picture isn't drawn twice and more graphics power is left for streaming. It comes back on when the window closes and before OBS quits. In Studio Mode the preview half is hidden; OBS's Program view there can't be turned off by a plugin. Turn this off in Settings ▸ Multiview if you want both.

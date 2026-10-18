@@ -22,6 +22,8 @@ To uninstall, quit OBS and delete
 
 ## Use
 
+- **Controls:** Docks ▸ **OBSViewer Controls** is a small remote: Window, Fullscreen
+  (pick the screen with the arrow), Close, layout, master bus on/off, Settings.
 - **Dock:** Docks ▸ OBSViewer. The icons at the top of the side bar open Settings,
   open the viewer in a window, or open it fullscreen.
 - **Window or fullscreen:** Tools ▸ OBSViewer ▸ Open Window, or Open Fullscreen ▸

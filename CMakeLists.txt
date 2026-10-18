@@ -149,6 +149,8 @@ target_sources(
     src/viewer/Renderer.hpp
     src/ui/Theme.cpp
     src/ui/Theme.hpp
+    src/ui/ControlDock.cpp
+    src/ui/ControlDock.hpp
     src/ui/ViewerDisplay.cpp
     src/ui/ViewerDisplay.hpp
     src/ui/ViewerDock.cpp

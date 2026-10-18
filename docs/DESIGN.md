@@ -162,6 +162,10 @@ Dynamic once (`settings_version` < 2).
   Fullscreen ↔ Windowed, Close. Esc leaves fullscreen; ⌘W closes. The windowed size
   and position, the fullscreen screen and the layout are remembered. Moving
   fullscreen to another screen recreates the window (macOS Spaces don't move cleanly).
+- **Controls dock (0.7.2)**: Docks ▸ OBSViewer Controls — viewer state (closed /
+  windowed / fullscreen + screen), Window · Fullscreen (toggle; arrow = screen menu) ·
+  Close, the window layout, Bus ON/OFF with plugin count and gain reduction, Open Bus,
+  Settings. Polls App / MasterBus state every 0.4 s while visible.
 - **No toolbar**: layout and tile-click action live in Settings (and layout in the
   right-click menu). Right-click: Layout, Send to Preview / Cut to Program (or Switch
   Scene), window / fullscreen / screen actions, Master Bus…, Settings…, Close.

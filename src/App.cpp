@@ -4,6 +4,7 @@
 
 #include "bus/MasterBus.hpp"
 #include "core/Settings.hpp"
+#include "ui/ControlDock.hpp"
 #include "ui/MasterBusWindow.hpp"
 #include "metrics/Metrics.hpp"
 #include "ui/Menu.hpp"
@@ -56,6 +57,10 @@ void App::init()
 	dock_ = new ViewerDock(mainWindow);
 	if (!obs_frontend_add_dock_by_id(kDockId, "OBSViewer", dock_)) {
 		obs_log(LOG_WARNING, "could not add the OBSViewer dock");
+	}
+	// Small remote for the viewer (Docks ▸ OBSViewer Controls).
+	if (!obs_frontend_add_dock_by_id("obsviewer-controls", "OBSViewer Controls", new ControlDock(mainWindow))) {
+		obs_log(LOG_WARNING, "could not add the OBSViewer Controls dock");
 	}
 
 	buildToolsMenu();
