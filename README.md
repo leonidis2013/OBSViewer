@@ -32,6 +32,8 @@ To uninstall, quit OBS and delete
 - **Layouts:** Settings ▸ Window layout / Dock layout, or right-click ▸ Layout.
   **Dynamic** (the default) puts Preview and Program on top and every scene below,
   sized to fill the window.
+- **Transitions:** CUT and AUTO buttons (with transition type and duration) at the top
+  of the side bar and in the controls dock; they need Studio Mode.
 - **Switching scenes:** off by default. Turn it on in Settings ▸ Clicking a view: a
   click then sends a scene to Preview (or cuts it to Program). Double-click Preview to
   take it to Program.

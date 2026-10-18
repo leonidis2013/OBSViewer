@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.7.4] — 2026-10-18
+
+- **Transition controls:** a Transition section at the top of the viewer's side bar, and in the OBSViewer Controls dock. **CUT** takes Preview to Program instantly; **AUTO** uses the chosen transition (its name is on the button). Pick the transition and its duration right there (the same list as OBS's). Outside Studio Mode it offers **Turn On Studio Mode**. In the small dock side bar only the two buttons show.
+
+
 ## [0.7.3] — 2026-10-18
 
 - **Fixed: fullscreen now opens on the screen you pick.** On Apple Silicon Macs it always went to the same screen. The viewer now moves to the chosen screen as a normal window, waits until macOS has it there, then goes fullscreen. Moving from one screen's fullscreen to another leaves fullscreen first, then re-enters it on the new screen.

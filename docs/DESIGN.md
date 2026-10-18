@@ -168,6 +168,13 @@ Dynamic once (`settings_version` < 2).
   2 s). Already fullscreen elsewhere → `showNormal()`, 0.9 s for the exit animation,
   then the same steps. Window-state changes on the way are ignored; Esc or choosing
   Window cancels.
+- **Transition controls (0.7.4)**: side bar section (top) and controls dock. CUT =
+  OBS's built-in Cut transition for one take (set Cut → trigger → restore the chosen
+  transition, all synchronous on the main thread); AUTO =
+  `obs_frontend_preview_program_trigger_transition` with the current transition.
+  Transition picker and duration mirror OBS (`obs_frontend_get/set_current_transition`,
+  `…_transition_duration`); duration is disabled for Cut and fixed-length transitions.
+  Outside Studio Mode: "Turn On Studio Mode". Compact side bar: buttons only.
 - **Controls dock (0.7.2)**: Docks ▸ OBSViewer Controls — viewer state (closed /
   windowed / fullscreen + screen), Window · Fullscreen (toggle; arrow = screen menu) ·
   Close, the window layout, Bus ON/OFF with plugin count and gain reduction, Open Bus,

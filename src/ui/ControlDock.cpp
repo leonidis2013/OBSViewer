@@ -6,6 +6,7 @@
 #include "core/Settings.hpp"
 #include "ui/Menu.hpp"
 #include "ui/Theme.hpp"
+#include "ui/TransitionControls.hpp"
 #include "viewer/Layouts.hpp"
 
 #include <QComboBox>
@@ -109,6 +110,8 @@ QPushButton#busPower:checked { background-color: #3ECF6E; border-color: #3ECF6E;
 	layout->setSpacing(6);
 	layout->addLayout(statusRow);
 	layout->addLayout(viewerRow);
+	layout->addWidget(caption(QStringLiteral("TRANSITION"), this));
+	layout->addWidget(new TransitionControls(false, this));
 	layout->addWidget(caption(QStringLiteral("LAYOUT"), this));
 	layout->addWidget(layout_);
 	layout->addWidget(caption(QStringLiteral("MASTER BUS"), this));
