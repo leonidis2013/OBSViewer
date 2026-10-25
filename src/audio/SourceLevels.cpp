@@ -18,6 +18,7 @@ levels::SourceReading LevelEntry::read(uint64_t nowNs) const
 	const uint64_t clip = clipNs.load(std::memory_order_relaxed);
 	r.clipped = clip && nowNs >= clip && static_cast<double>(nowNs - clip) / 1e9 < levels::kClipHoldSec;
 	r.muted = muted.load(std::memory_order_relaxed);
+	r.live = last && nowNs >= last && static_cast<double>(nowNs - last) / 1e9 < levels::kLiveSec;
 	return r;
 }
 

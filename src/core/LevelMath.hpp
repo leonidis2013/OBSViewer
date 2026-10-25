@@ -30,11 +30,16 @@ struct SourceReading {
 	float rms[2] = {kFloorDb, kFloorDb};
 	bool muted = false;
 	bool clipped = false; // clipped within the hold time
+	// Audio actually arrived recently. Cameras, capture cards and stopped media
+	// say they can carry audio but send none: they don't count.
+	bool live = true;
 };
+
+constexpr double kLiveSec = 3.0; // no audio for this long = the source has none
 
 // What a tile shows: the loudest unmuted source per channel.
 struct TileLevels {
-	bool hasAudio = false; // the scene contains at least one audio source
+	bool hasAudio = false; // a source in the scene is sending audio (even silence)
 	bool allMuted = false; // ...and every one of them is muted
 	bool clipped = false;  // an unmuted source clipped recently
 	float peak[2] = {kFloorDb, kFloorDb};
@@ -44,11 +49,13 @@ struct TileLevels {
 inline TileLevels combine(const std::vector<SourceReading> &sources)
 {
 	TileLevels t;
-	t.hasAudio = !sources.empty();
+	t.hasAudio = std::any_of(sources.begin(), sources.end(), [](const SourceReading &s) { return s.live; });
 	if (!t.hasAudio)
 		return t;
 	t.allMuted = true;
 	for (const SourceReading &s : sources) {
+		if (!s.live)
+			continue;
 		if (s.muted)
 			continue;
 		t.allMuted = false;

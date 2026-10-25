@@ -629,6 +629,20 @@ static void testLevelMath()
 		c.clipped = true;
 		CHECK(combine({c}).clipped);
 	}
+	{
+		// a camera that says it has audio but sends none: greyed out
+		SourceReading cam;
+		cam.live = false;
+		CHECK(!combine({cam}).hasAudio);
+		SourceReading mic;
+		mic.peak[0] = -20.0f;
+		const TileLevels t = combine({cam, mic});
+		CHECK(t.hasAudio && !t.allMuted && t.peak[0] == -20.0f);
+		SourceReading mutedCam;
+		mutedCam.live = false;
+		mutedCam.muted = true;
+		CHECK(!combine({mutedCam}).hasAudio);
+	}
 }
 
 static void testPerformance()

@@ -541,16 +541,10 @@ void Renderer::render(const std::string &layoutId, uint32_t cx, uint32_t cy, flo
 			drawBox(cxp - px / 2.0f, cyp - arm, px, 2.0f * arm, 0x80FFFFFFu);
 		}
 
-		if (snap.showTileMeters) {
+		// No meter on Program: the side bar's Programme audio meter shows the real mix.
+		if (snap.showTileMeters && !isProgram) {
 			levels::TileLevels tl;
-			if (isProgram) {
-				// Program tile shows the real stream mix (the track the loudness meter measures).
-				const auto a = ProgramLoudness::get().snapshot();
-				tl.hasAudio = a.active;
-				tl.peak[0] = tl.rms[0] = a.peakL;
-				tl.peak[1] = tl.rms[1] = a.peakR;
-				tl.clipped = a.truePeak3s > 0.0f;
-			} else if (tile.kind == TileKind::Preview) {
+			if (tile.kind == TileKind::Preview) {
 				tl = readTile(snap.previewAudio, now);
 			} else if (tile.kind == TileKind::Scene && sceneIdx >= 0 &&
 				   static_cast<size_t>(sceneIdx) < snap.sceneAudio.size()) {

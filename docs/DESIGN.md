@@ -246,13 +246,16 @@ only for a Problem.
 
 ### Tile audio meters (stage 3, 0.3.0)
 
-- Always shown (0.6.2); a view with no audio gets grey empty tracks.
+- Always shown (0.6.2); a view with no audio gets grey empty tracks. "No audio"
+  (0.10.1) = no source in the scene has sent audio in the last 3 s: cameras,
+  capture cards and stopped media are flagged as audio sources but send nothing.
 - Two bars (L / R) at the right edge of each picture: RMS solid, peak tick; green,
   amber from −9 dBFS, red from −3 dBFS; scale −60 to 0 dBFS; 20 dB/s fall-back.
 - Scene tiles: loudest unmuted source among the scene's visible audio sources
   (groups and nested scenes included). Sources set in OBS Settings ▸ Audio as global
   devices aren't part of any scene, so they show only in the programme meter.
-- Preview tile: the preview scene's sources. Program tile: the measured stream mix.
+- Preview tile: the preview scene's sources. Program tile: no meter (0.10.1); the
+  side bar's Programme audio meter shows the stream mix.
 - Muted: all sources in the scene muted → red meter background and a MUTED tag.
 - Clip: sample peak ≥ −0.5 dBFS → red cap for 2 s.
 - One OBS volume meter per audio source, shared by all tiles; created and removed as

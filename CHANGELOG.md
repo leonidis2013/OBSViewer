@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.10.1] — 2026-10-25
+
+- **Fixed: views showed an audio meter for scenes with no audio.** Cameras, capture cards and stopped media tell OBS they *can* carry audio even when they send none, and that was enough to light the meter. A view's meter is now greyed out unless something in the scene has actually sent audio in the last 3 seconds. This applies to Preview and every scene view.
+- **No audio meter on the Program view.** The side bar's Programme audio meter shows the stream mix.
+
+
 ## [0.10.0] — 2026-10-25
 
 - **YouTube stream title** across the top of the multiview (a slim banner with a red tab while live) and in the OBSViewer Controls dock. It's found automatically when OBS is connected to your YouTube account (Settings ▸ Stream, then Manage Broadcast). Otherwise enter your channel's @handle in Settings ▸ YouTube and it's read from the channel's live page, which also finds streams scheduled in YouTube Studio. It's checked every minute while live and every 3 minutes otherwise. Settings ▸ YouTube shows where the title came from, or why there isn't one, and has **Check Now**. Turn it off there too.
