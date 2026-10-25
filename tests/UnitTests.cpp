@@ -567,10 +567,8 @@ static void testHealth()
 		in.truePeakRecentDb = 0.4f;
 		CHECK(evaluateHealth(in).levelOf("Peaks") == Level::Bad);
 
-		in.silentSeconds = 12.0;
-		CHECK(evaluateHealth(in).levelOf("Silence") == Level::Bad);
-		in.streaming = false;
-		CHECK(evaluateHealth(in).levelOf("Silence") == Level::Warn);
+		// No silence check (removed in 0.10.4): quiet moments aren't alarms.
+		CHECK(evaluateHealth(in).levelOf("Silence") == Level::Off);
 	}
 	// No audio at all: audio checks are off, not alarms.
 	{
@@ -579,7 +577,6 @@ static void testHealth()
 		const HealthReport r = evaluateHealth(in);
 		CHECK(r.levelOf("Loudness") == Level::Off);
 		CHECK(r.levelOf("Peaks") == Level::Off);
-		CHECK(r.levelOf("Silence") == Level::Off);
 	}
 }
 

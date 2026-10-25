@@ -34,7 +34,7 @@ channel strip that hosts VST3 and Audio Unit plugins.
 |---|---|---|
 | **1 — Multiview core** | 0.1.x | Plugin project, universal CI, `.pkg` installer, in-plugin updater, dock + fullscreen window, program/preview tiles, tally, labels, layout presets, stream/record status lights, settings. |
 | 2 — Stream health | 0.2.x | Stream and record panels: bitrate (graph), dropped frames (network / encoder / render), congestion, uptime, reconnects, record duration and file size, multiple outputs (stream, record, virtual cam, replay buffer). |
-| 3 — Audio | 0.3.x | Per-tile audio meters (peak + RMS), program LUFS (momentary, short-term, integrated) and true peak with platform targets, mute indicators, clip and silence alarms. |
+| 3 — Audio | 0.3.x | Per-tile audio meters (peak + RMS), program LUFS (momentary, short-term, integrated) and true peak with platform targets, mute indicators, clip alarm (silence alarm removed in 0.10.4). |
 | 4 — Alerts & utilities | 0.4.x | Black / frozen frame detection, clock, stream timer, countdown, CPU / render-lag readout, safe-area guides, click-to-switch, tile→scene assignment. |
 | 5 — Master bus | 0.5.x | Plugin host (JUCE), master bus via a send track, insert slots, gain stages, meters, latency compensation. Per-source strip filter follows. |
 | 6 — Strip ↔ multiview | 0.6.x | Master LUFS, gain reduction and chain status on the multiview; out-of-process (crash-safe) plugin mode. |
@@ -239,7 +239,6 @@ output writes in bursts at each keyframe, so per-second figures swing widely.
 | Disk | < 20 GB free or < 3 h left | < 5 GB free or < 1 h left |
 | Loudness | outside target ± tolerance | more than tolerance + 3 LU too loud |
 | Peaks | above the true-peak ceiling | above 0 dBTP (clipping) |
-| Silence | silent ≥ 10 s while not live | silent ≥ 10 s while live |
 
 Every check appears in the health list; only the health light itself flashes, and
 only for a Problem.

@@ -22,7 +22,6 @@ namespace obsviewer {
 
 namespace {
 
-constexpr double kSilenceFloorLufs = -50.0;
 
 double pctOverWindow(const History<uint32_t> &part, const History<uint32_t> &total)
 {
@@ -294,10 +293,6 @@ void Metrics::sample()
 	// ---------------- audio ----------------
 	refreshAudio();
 	loudnessHistory.push(audio.active ? audio.shortTerm : -120.0f);
-	if (audio.active && audio.shortTerm < kSilenceFloorLufs)
-		silentSeconds += dt;
-	else
-		silentSeconds = 0.0;
 
 	// ---------------- picture ----------------
 	{
@@ -356,7 +351,6 @@ void Metrics::sample()
 	in.shortTermLufs = audio.shortTerm;
 	in.integratedLufs = audio.integrated;
 	in.truePeakRecentDb = audio.truePeak3s;
-	in.silentSeconds = silentSeconds;
 	in.pictureKnown = pictureKnown;
 	in.blackSeconds = blackSeconds;
 	in.stillSeconds = stillSeconds;

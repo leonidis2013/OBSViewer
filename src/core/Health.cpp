@@ -154,15 +154,6 @@ HealthReport evaluateHealth(const HealthInputs &in)
 						   : fmt("%.1f dBTP · under the ceiling", in.truePeakRecentDb));
 	}
 
-	// ---- Silence ----
-	if (!in.audioActive) {
-		add("Silence", Level::Off, "No audio");
-	} else if (in.silentSeconds >= 10.0) {
-		add("Silence", in.streaming ? Level::Bad : Level::Warn, fmt("Silent for %.0f s", in.silentSeconds));
-	} else {
-		add("Silence", Level::Good, "Audio present");
-	}
-
 	// ---- Picture (Program black or frozen) ----
 	const bool live = in.streaming || in.recording;
 	if (!in.pictureKnown) {

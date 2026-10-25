@@ -72,7 +72,6 @@ public:
 	} system;
 
 	ProgramLoudness::Snapshot audio; // refreshed by refreshAudio(), ~20 Hz
-	double silentSeconds = 0.0;
 	// Program picture (PictureMonitor), seconds black / unchanged.
 	bool pictureKnown = false;
 	double blackSeconds = 0.0;

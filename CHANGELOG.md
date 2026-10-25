@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.10.4] — 2026-10-25
+
+- **Removed the silence alarm.** Quiet moments (prayer, a pause between songs) set off the health light as a problem while live. With the routing diagram and Listen to Stream you can confirm the audio path directly, so the check is gone.
+
+
 ## [0.10.3] — 2026-10-25
 
 - **Fixed: view audio meters flickered** (since 0.10.1). When a source's audio arrived in the instant between the multiview reading the clock and reading the meter, that frame counted the source as having no audio and greyed the meter out. Fresh audio now always counts. The red clip light had the same race and is fixed too.

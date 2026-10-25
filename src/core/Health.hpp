@@ -25,7 +25,6 @@ struct HealthInputs {
 	float shortTermLufs = -120.0f;
 	float integratedLufs = -120.0f;
 	float truePeakRecentDb = -120.0f; // last few seconds
-	double silentSeconds = 0.0;       // short-term below the silence floor
 	float targetLufs = -14.0f;
 	float toleranceLu = 1.0f;
 	float ceilingDbtp = -1.0f;
