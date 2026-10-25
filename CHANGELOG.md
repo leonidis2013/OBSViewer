@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.8.3] — 2026-10-25
+
+- **Fixed: the master bus processed audio but nothing left it.** The bus showed signal, but the stream (and the Programme audio meter) got nothing from it. OBS treated the bus's audio as arriving late, kept adding audio buffering until it hit its limit, then dropped it. The bus now hands its audio to the next mix block, so OBS always takes it. **Restart OBS after updating** (the update does this) so the extra buffering from before is cleared.
+- The bus is now one OBS audio block (about 21 ms) behind sources that skip it, plus any plugin latency; the strip's footer shows the total ("Bus delay 21 ms"). Plugin latency can't be pulled earlier inside OBS, so it's no longer "compensated".
+
+
 ## [0.8.2] — 2026-10-25
 
 - **Listen to Stream:** a button in the master bus strip and under Programme audio in the side bar. It plays exactly what the stream sends — the final mix with the master bus — through OBS's monitoring device (Settings ▸ Audio ▸ Advanced ▸ Monitoring Device). It runs slightly behind the live sound, so it's for checking the mix, not for in-ear monitors. It follows the stream's audio track and is off when OBS starts.

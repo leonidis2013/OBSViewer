@@ -433,9 +433,15 @@ other sources  ─────────────────────�
 - The bus source is a private, hidden OBS audio source on global output channel 63,
   assigned only to the output tracks (never the send track, so no feedback).
 - The send track's mix arrives through a raw audio callback on OBS's audio thread,
-  is processed in place, and is output with the original timestamp. OBS adds one
-  audio tick of buffering (≈ 20 ms) the first time; plugin latency is compensated
-  with a negative sync offset on the bus source.
+  is processed in place, and is output **stamped for the next mix block**
+  (timestamp + 1024 frames). The callback runs after OBS has mixed that block, so
+  its own timestamp is already in the past. Up to 0.8.2 the bus used it (minus the
+  plugin latency as a negative sync offset): OBS treated the bus as late, added
+  audio buffering every tick until "Max audio buffering reached", then discarded
+  its audio — the bus processed but nothing reached the output tracks. Now the bus
+  is exactly one block (≈ 21 ms at 48 kHz) behind, plus plugin latency, which can't
+  be pulled earlier (anything earlier than the block being mixed is dropped). The
+  strip footer shows the total delay; sync offset on the bus source is 0.
 - If OBS starts with the bus off but sources still routed (e.g. after a crash),
   their tracks are restored automatically.
 - Track assignments are ordinary OBS settings saved in the scene collection, and
@@ -536,7 +542,7 @@ Vertical strip (LiveProfessor / Waves style) on the left, plugin browser on the 
   turn. While it loads, saving writes the saved chain back unchanged, so a quit in
   that window can't lose plugins.
 - Fader, trim and bypass changes save 0.8 s after the last change (`saveSoon`).
-- The chain latency is re-read every 0.5 s; a change re-applies the sync offset.
+- The chain latency is re-read every 0.5 s (shown in the strip footer as the bus delay).
 - Panels detect changes from an engine revision counter plus the routing settings,
   run their meter timer only while shown, and the mixer icon shows bus status (green
   running, amber ≥ 1 dB reduction).

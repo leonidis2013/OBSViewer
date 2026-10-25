@@ -1313,13 +1313,19 @@ void MasterBusPanel::refreshStatus()
 	for (int t = 0; t < 6; ++t)
 		if (cfg.outputMask & (1u << t))
 			outs += (outs.isEmpty() ? QString() : QStringLiteral(", ")) + QString::number(t + 1);
+	// The bus is one OBS mix block behind, plus whatever the plugins add.
 	const int lat = bus::Engine::get().latencySamples();
-	const double ms = 1000.0 * lat / std::max(1.0, bus::Engine::get().sampleRate());
+	const double sr = std::max(1.0, bus::Engine::get().sampleRate());
+	const double blockMs = 1000.0 * AUDIO_OUTPUT_FRAMES / sr;
+	const double ms = 1000.0 * lat / sr;
 	footer_->setText(QStringLiteral("Track %1 in → track %2 out\n%3")
 				 .arg(cfg.sendTrack)
 				 .arg(outs.isEmpty() ? QStringLiteral("none") : outs)
-				 .arg(lat > 0 ? QStringLiteral("Latency %1 samples (%2 ms), compensated").arg(lat).arg(ms, 0, 'f', 1)
-					      : QStringLiteral("No added latency")));
+				 .arg(lat > 0 ? QStringLiteral("Bus delay %1 ms (plugins %2 ms)").arg(blockMs + ms, 0, 'f', 0).arg(ms, 0, 'f', 1)
+					      : QStringLiteral("Bus delay %1 ms").arg(blockMs, 0, 'f', 0)));
+	footer_->setToolTip(QStringLiteral("Audio through the bus reaches the stream this much later than the picture "
+					   "and than sources that skip the bus. Under about 40 ms is hard to notice; for more, "
+					   "delay the picture or the other sources with OBS's Sync Offset."));
 }
 
 void MasterBusPanel::refreshBrowser()

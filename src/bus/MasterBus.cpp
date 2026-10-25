@@ -7,6 +7,7 @@
 #include <obs-frontend-api.h>
 #include <obs-module.h>
 #include <util/platform.h>
+#include <util/util_uint64.h>
 
 #include <plugin-support.h>
 
@@ -324,13 +325,12 @@ void MasterBus::applyOutputMixers()
 {
 	if (source_)
 		obs_source_set_audio_mixers(source_, config_.outputMask);
-	// Plugin latency delays the bus; pull it earlier by the same amount so it stays
-	// in sync with video and with sources that bypass the bus.
+	// No negative sync offset: the bus's audio already arrives one mix block after
+	// the block it came from, and anything stamped earlier than the block OBS is
+	// mixing is discarded (once OBS's audio buffering is at its limit), which
+	// silenced the bus. Plugin latency is shown in the strip instead.
 	if (source_) {
-		const double sr = std::max(1.0, bus::Engine::get().sampleRate());
-		const int64_t latencyNs =
-			static_cast<int64_t>(static_cast<double>(bus::Engine::get().latencySamples()) / sr * 1e9);
-		obs_source_set_sync_offset(source_, -latencyNs);
+		obs_source_set_sync_offset(source_, 0);
 		lastLatency_ = bus::Engine::get().latencySamples();
 	}
 }
@@ -354,7 +354,13 @@ void MasterBus::onMix(void *param, size_t, struct audio_data *data)
 	out.speakers = SPEAKERS_STEREO;
 	out.format = AUDIO_FORMAT_FLOAT_PLANAR;
 	out.samples_per_sec = self->sampleRate_;
-	out.timestamp = data->timestamp;
+	// The raw callback runs after OBS has mixed this block, so the block's own
+	// timestamp is already in the past: stamped with it, the audio is "late",
+	// OBS keeps adding audio buffering until it hits the maximum, then drops it.
+	// Stamp it for the next block instead, which OBS mixes on its next tick: the
+	// bus is one block (1024 samples, ~21 ms at 48 kHz) behind, every time.
+	out.timestamp = data->timestamp +
+			util_mul_div64(frames, 1000000000ULL, self->sampleRate_ ? self->sampleRate_ : 48000);
 	obs_source_output_audio(src, &out);
 }
 

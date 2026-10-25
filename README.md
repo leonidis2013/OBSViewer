@@ -69,7 +69,9 @@ How it works: ticked sources are moved off your output track (Track 1, what the
 stream and recording send) onto a spare track (Track 6 by default). OBSViewer
 processes that track through your chain and puts the result back on Track 1.
 Unticking a source, or turning the bus off, restores its tracks exactly. Don't use
-the bus input track for anything else. Plugin latency is compensated automatically.
+the bus input track for anything else. Audio through the bus reaches the stream
+about 21 ms later than sources that skip it, plus any latency the plugins add; the
+strip's footer shows the total. Under about 40 ms is hard to notice.
 
 The stream only sends one track (OBS ▸ Settings ▸ Output ▸ Streaming ▸ Audio Track;
 Simple mode = Track 1). If the bus doesn't output there, the strip shows a red
