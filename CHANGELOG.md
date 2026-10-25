@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.10.2] — 2026-10-25
+
+- **Steadier upload speed.** The stream goes out in bursts (a big one at every keyframe), so measuring once a second made the number jump around. The upload speed and its 5-minute graph now average over the last 10 seconds.
+- **Master fader:** the gain-reduction meter and its readout are gone. Each insert slot still shows its own gain reduction.
+
+
 ## [0.10.1] — 2026-10-25
 
 - **Fixed: views showed an audio meter for scenes with no audio.** Cameras, capture cards and stopped media tell OBS they *can* carry audio even when they send none, and that was enough to light the meter. A view's meter is now greyed out unless something in the scene has actually sent audio in the last 3 seconds. This applies to Preview and every scene view.

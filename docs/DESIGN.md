@@ -224,7 +224,8 @@ There is no bottom bar any more; network and loudness history moved into the sid
   Click to reset. Below it the **loudness history** (5 min) against the target band.
   No warning borders around the meter or the history.
 
-Note: "Upload" is what OBS is sending, not a speed test of the internet line.
+Note: "Upload" is what OBS is sending, not a speed test of the internet line. It is averaged over 10 s (`RateWindow`, 0.10.2): the
+output writes in bursts at each keyframe, so per-second figures swing widely.
 
 **Health checks and thresholds**
 

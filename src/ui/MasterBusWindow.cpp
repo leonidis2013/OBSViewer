@@ -504,8 +504,8 @@ private:
 };
 
 // ---------------------------------------------------------------------------
-// Output section: fader, stereo output meters with peak hold, and the chain's
-// total gain reduction, on one shared scale.
+// Output section: fader and stereo output meters with peak hold, on one shared
+// scale. (Each insert slot shows its own gain reduction.)
 class FaderMeter : public QWidget {
 public:
 	explicit FaderMeter(QWidget *parent) : QWidget(parent)
@@ -523,11 +523,10 @@ public:
 		fader_ = std::clamp(db, -60.0f, 12.0f);
 		update();
 	}
-	void setLevels(float l, float r, float reduction)
+	void setLevels(float l, float r)
 	{
 		level_[0] = l;
 		level_[1] = r;
-		reduction_ = reduction;
 		const qint64 now = QDateTime::currentMSecsSinceEpoch();
 		for (int c = 0; c < 2; ++c)
 			if (level_[c] >= hold_[c] || now - holdAt_[c] > 2000) {
@@ -539,7 +538,7 @@ public:
 
 protected:
 	struct Geometry {
-		QRectF area, scale, track, meters[2], gr, readout;
+		QRectF area, scale, track, meters[2], readout;
 	};
 
 	Geometry geometry() const
@@ -548,12 +547,11 @@ protected:
 		const QRectF r = QRectF(rect());
 		g.readout = QRectF(r.left(), r.bottom() - 34, r.width(), 34);
 		g.area = QRectF(r.left(), r.top() + 18, r.width(), r.height() - 18 - 40);
-		const qreal x = r.left() + (r.width() - (26 + 34 + 10 + 9 + 3 + 9 + 10 + 9)) / 2.0;
+		const qreal x = r.left() + (r.width() - (26 + 34 + 10 + 9 + 3 + 9)) / 2.0;
 		g.scale = QRectF(x, g.area.top(), 26, g.area.height());
 		g.track = QRectF(g.scale.right(), g.area.top(), 34, g.area.height());
 		g.meters[0] = QRectF(g.track.right() + 10, g.area.top(), 9, g.area.height());
 		g.meters[1] = QRectF(g.meters[0].right() + 3, g.area.top(), 9, g.area.height());
-		g.gr = QRectF(g.meters[1].right() + 10, g.area.top(), 9, g.area.height() * 0.45);
 		return g;
 	}
 
@@ -573,8 +571,6 @@ protected:
 			    col(theme::kTextDim), paint::font(9.5, true), Qt::AlignCenter);
 		paint::text(p, QRectF(g.meters[0].left() - 6, 0, 30, 14), QStringLiteral("L R"), col(theme::kTextDim),
 			    paint::font(9.5, true), Qt::AlignCenter);
-		paint::text(p, QRectF(g.gr.left() - 8, 0, g.gr.width() + 16, 14), QStringLiteral("GR"),
-			    col(theme::kTextDim), paint::font(9.5, true), Qt::AlignCenter);
 
 		// scale + grid
 		for (float db : {12.0f, 6.0f, 0.0f, -6.0f, -12.0f, -18.0f, -24.0f, -36.0f, -48.0f, -60.0f}) {
@@ -629,26 +625,11 @@ protected:
 			}
 		}
 
-		// gain reduction, hanging from the top (0 … 24 dB)
-		p.setPen(Qt::NoPen);
-		p.setBrush(col(theme::kBg));
-		p.drawRoundedRect(g.gr, 2, 2);
-		if (reduction_ >= 0.1f) {
-			const qreal h = g.gr.height() * std::clamp(static_cast<qreal>(reduction_) / 24.0, 0.0, 1.0);
-			p.setBrush(col(theme::kAccentAmber));
-			p.drawRoundedRect(QRectF(g.gr.left(), g.gr.top(), g.gr.width(), h), 2, 2);
-		}
-		for (int db : {6, 12, 18}) {
-			const qreal y = g.gr.top() + g.gr.height() * db / 24.0;
-			paint::text(p, QRectF(g.gr.right() + 2, y - 6, 18, 12), QString::number(db), col(theme::kTextFaint),
-				    paint::font(8.5), Qt::AlignLeft | Qt::AlignVCenter);
-		}
-
 		// readouts
 		const QRectF ro = g.readout;
-		const qreal third = ro.width() / 3.0;
+		const qreal half = ro.width() / 2.0;
 		auto readout = [&](int i, const QString &label, const QString &value, const QColor &c) {
-			const QRectF cell(ro.left() + third * i, ro.top(), third, ro.height());
+			const QRectF cell(ro.left() + half * i, ro.top(), half, ro.height());
 			paint::text(p, QRectF(cell.left(), cell.top(), cell.width(), 14), label, col(theme::kTextFaint),
 				    paint::font(9.5), Qt::AlignCenter);
 			paint::text(p, QRectF(cell.left(), cell.top() + 14, cell.width(), 18), value, c, paint::font(12, true),
@@ -661,8 +642,6 @@ protected:
 		const float peak = std::max(hold_[0], hold_[1]);
 		readout(1, QStringLiteral("Peak"), peak > -99.0f ? paint::db(peak) : QStringLiteral("−∞"),
 			peak > -60.0f ? peakColor(peak) : col(theme::kTextFaint));
-		readout(2, QStringLiteral("GR"), reduction_ >= 0.1f ? QStringLiteral("−%1").arg(reduction_, 0, 'f', 1) : QStringLiteral("0"),
-			reduction_ >= 0.1f ? col(theme::kAccentAmber) : col(theme::kTextFaint));
 	}
 
 	void mousePressEvent(QMouseEvent *e) override
@@ -715,7 +694,6 @@ private:
 	float level_[2] = {-120.0f, -120.0f};
 	float hold_[2] = {-120.0f, -120.0f};
 	qint64 holdAt_[2] = {0, 0};
-	float reduction_ = 0.0f;
 	bool dragging_ = false;
 	qreal dragY_ = 0;
 	float dragStart_ = 0.0f;
@@ -992,9 +970,8 @@ MasterBusPanel::MasterBusPanel(bool embedded, QWidget *parent) : QWidget(parent)
 			const bus::Levels l = engine.slotLevels(static_cast<int>(i));
 			slots_[i]->setMeter(l.reduction, std::max(l.post[0], l.post[1]));
 		}
-		const float total = engine.totalReduction();
 		const bus::Levels m = engine.masterLevels();
-		fader_->setLevels(m.post[0], m.post[1], total);
+		fader_->setLevels(m.post[0], m.post[1]);
 
 		// The stream's track (a profile setting) is re-read twice a second.
 		if (++ticks_ % 12 == 0)

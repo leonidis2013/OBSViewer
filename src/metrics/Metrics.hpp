@@ -2,6 +2,7 @@
 
 #include "audio/ProgramLoudness.hpp"
 #include "core/Health.hpp"
+#include "core/RateWindow.hpp"
 #include "core/History.hpp"
 
 #include <QObject>
@@ -116,6 +117,7 @@ private:
 
 	// previous counters
 	uint64_t lastStreamBytes_ = 0;
+	RateWindow streamRate_{10.0};
 	uint64_t lastRecordBytes_ = 0;
 	uint64_t lastSampleNs_ = 0;
 	uint64_t streamStartNs_ = 0;

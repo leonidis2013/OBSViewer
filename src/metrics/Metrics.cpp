@@ -175,6 +175,7 @@ void Metrics::sample()
 		streamStartNs_ = now;
 		stream.reconnects = 0;
 		lastStreamBytes_ = 0;
+		streamRate_.reset();
 		lastDropped_ = 0;
 		dropWindow_.clear();
 		wasReconnecting_ = false;
@@ -184,9 +185,10 @@ void Metrics::sample()
 	if (obs_output_t *out = obs_frontend_get_streaming_output()) {
 		if (stream.active) {
 			const uint64_t bytes = obs_output_get_total_bytes(out);
-			if (bytes < lastStreamBytes_)
-				lastStreamBytes_ = 0;
-			stream.kbps = static_cast<double>(bytes - lastStreamBytes_) * 8.0 / 1000.0 / dt;
+			// Averaged over 10 s: the stream goes out in bursts (keyframes), so a
+			// one-second figure swings far above and below the real rate.
+			streamRate_.push(now, bytes);
+			stream.kbps = streamRate_.kbps();
 			lastStreamBytes_ = bytes;
 			stream.totalBytes = bytes;
 

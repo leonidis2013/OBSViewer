@@ -9,6 +9,7 @@
 #include "core/Health.hpp"
 #include "core/History.hpp"
 #include "core/LevelMath.hpp"
+#include "core/RateWindow.hpp"
 #include "core/Version.hpp"
 #include "core/YouTube.hpp"
 #include "update/ReleaseInfo.hpp"
@@ -329,6 +330,26 @@ static void testYouTube()
 	CHECK(ogTitle("<p>nothing</p>").empty());
 	CHECK(decodeEntities("a &unknown; b & c") == "a &unknown; b & c");
 	CHECK(decodeEntities("&quot;Hi&quot; &#39;x&#39;") == "\"Hi\" 'x'");
+}
+
+static void testRateWindow()
+{
+	RateWindow w(10.0);
+	CHECK(w.kbps() == 0.0);
+	// 6000 kbps sent in bursts: 1.5 MB every 2 s, nothing in between.
+	uint64_t bytes = 0;
+	for (int s = 0; s <= 30; ++s) {
+		if (s % 2 == 0)
+			bytes += 1500000;
+		w.push(static_cast<uint64_t>(s) * 1000000000ull, bytes);
+	}
+	// 10 s holds 5 or 6 bursts: 6000-7200, where 1-s samples swing 0-12000.
+	CHECK(w.kbps() >= 5999.0 && w.kbps() <= 7201.0);
+	// A total that goes backwards starts over.
+	w.push(31000000000ull, 10);
+	CHECK(w.kbps() == 0.0);
+	w.push(32000000000ull, 125010);
+	CHECK(std::fabs(w.kbps() - 1000.0) < 1e-6);
 }
 
 static void testPictureHealth()
@@ -688,6 +709,7 @@ int main()
 	testCountdown();
 	testBusTracks();
 	testYouTube();
+	testRateWindow();
 	testPictureHealth();
 	testVersions();
 	testSelection();
