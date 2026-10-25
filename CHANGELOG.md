@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.8.2] — 2026-10-25
+
+- **Listen to Stream:** a button in the master bus strip and under Programme audio in the side bar. It plays exactly what the stream sends — the final mix with the master bus — through OBS's monitoring device (Settings ▸ Audio ▸ Advanced ▸ Monitoring Device). It runs slightly behind the live sound, so it's for checking the mix, not for in-ear monitors. It follows the stream's audio track and is off when OBS starts.
+- **Stream-track check:** if the bus doesn't output on the track the stream sends, the bus strip shows a red warning with a **Fix** button, and the health light warns ("Master bus"), as a problem while live. Fix adds the stream's track to the bus outputs (and moves the bus input track if the stream was set to send it).
+- **Fixed:** adding an output track to the bus could send routed sources to that track twice (dry and processed). Changing the bus outputs now takes routed sources off every output track.
+
+
 ## [0.8.1] — 2026-10-24
 
 - **Countdown days:** Settings ▸ Clock now has a checkbox for each day (Sun–Sat). The countdown runs only on the days you tick; on other days the clock shows when the next one is ("Service starts Sun 10:30 AM"). Existing setups keep every day ticked. It also works across midnight.

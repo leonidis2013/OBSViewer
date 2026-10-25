@@ -1,6 +1,8 @@
 #include "bus/MasterBus.hpp"
 
 #include "bus/Engine.hpp"
+#include "core/Health.hpp"
+#include "metrics/Metrics.hpp"
 
 #include <obs-frontend-api.h>
 #include <obs-module.h>
@@ -381,21 +383,13 @@ void MasterBus::setSendTrack(int track)
 	track = std::clamp(track, 1, 6);
 	if (track == config_.sendTrack)
 		return;
-	// Re-route existing sources onto the new send track.
-	const uint32_t oldBit = 1u << (config_.sendTrack - 1);
 	const uint32_t newBit = 1u << (track - 1);
-	for (const auto &[uuid, original] : originalMixers_) {
-		(void)original;
-		obs_source_t *s = obs_get_source_by_uuid(uuid.c_str());
-		if (!s)
-			continue;
-		obs_source_set_audio_mixers(s, (obs_source_get_audio_mixers(s) & ~oldBit) | newBit);
-		obs_source_release(s);
-	}
 	config_.sendTrack = track;
 	config_.outputMask &= ~newBit;
 	if (!config_.outputMask)
 		config_.outputMask = track == 1 ? 2 : 1;
+	// Re-route existing sources onto the new send track.
+	reapplyRouting();
 	if (running()) {
 		stop();
 		start();
@@ -411,7 +405,43 @@ void MasterBus::setOutputMask(uint32_t mask)
 		return;
 	config_.outputMask = mask;
 	applyOutputMixers();
+	// Routed sources come off every output track (a track added here would
+	// otherwise get them twice: dry and through the bus).
+	reapplyRouting();
 	save();
+}
+
+void MasterBus::reapplyRouting()
+{
+	const uint32_t sendBit = 1u << (config_.sendTrack - 1);
+	for (const auto &[uuid, original] : originalMixers_) {
+		obs_source_t *s = obs_get_source_by_uuid(uuid.c_str());
+		if (!s)
+			continue;
+		obs_source_set_audio_mixers(s, (original & ~config_.outputMask) | sendBit);
+		obs_source_release(s);
+	}
+}
+
+int MasterBus::streamTrack()
+{
+	return Metrics::streamTrackIndex() + 1;
+}
+
+bool MasterBus::reachesStream() const
+{
+	return busReachesTrack(config_.sendTrack, config_.outputMask, streamTrack());
+}
+
+void MasterBus::matchStreamTrack()
+{
+	const int stream = streamTrack();
+	const BusTracks t = busTracksFor(config_.sendTrack, config_.outputMask, stream);
+	obs_log(LOG_INFO, "master bus: matching the stream's Track %d (send Track %d, outputs 0x%x)", stream,
+		t.sendTrack, t.outputMask);
+	if (t.sendTrack != config_.sendTrack)
+		setSendTrack(t.sendTrack);
+	setOutputMask(t.outputMask);
 }
 
 // ------------------------------------------------------------------ routing

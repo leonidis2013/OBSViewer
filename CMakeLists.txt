@@ -119,7 +119,9 @@ target_sources(
     src/Hotkeys.cpp
     src/Hotkeys.hpp
     src/audio/ProgramLoudness.cpp
+    src/audio/StreamMonitor.cpp
     src/audio/ProgramLoudness.hpp
+    src/audio/StreamMonitor.hpp
     src/audio/SourceLevels.cpp
     src/bus/MasterBus.cpp
     src/bus/MasterBus.hpp

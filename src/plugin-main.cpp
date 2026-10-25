@@ -9,6 +9,7 @@ the Free Software Foundation; either version 2 of the License, or
 */
 
 #include "App.hpp"
+#include "audio/StreamMonitor.hpp"
 #include "bus/MasterBus.hpp"
 
 #include <obs-module.h>
@@ -33,6 +34,7 @@ bool obs_module_load(void)
 {
 	curl_global_init(CURL_GLOBAL_DEFAULT);
 	obsviewer::MasterBus::registerSource();
+	obsviewer::StreamMonitor::registerSource();
 	obsviewer::App::get().init();
 	obs_log(LOG_INFO, "loaded (version %s)", PLUGIN_VERSION);
 	return true;

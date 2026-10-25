@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstdint>
 #include <string>
 #include <vector>
 
@@ -32,7 +33,25 @@ struct HealthInputs {
 	double blackSeconds = 0.0;    // Program has been (near) black this long
 	double stillSeconds = 0.0;    // Program hasn't changed this long
 	bool warnFrozen = true;       // Settings: warn about a frozen picture
+	// Master bus: does its output reach the track the stream sends?
+	bool busActive = false;       // running with at least one source routed
+	int busSendTrack = 6;         // 1-6
+	uint32_t busOutputMask = 1;   // bit per track
+	int streamTrack = 1;          // 1-6, the track the stream encodes
 };
+
+// True if the bus's output lands on `track` (1-6) and that track isn't the bus's
+// own (unprocessed) send track.
+bool busReachesTrack(int sendTrack, uint32_t outputMask, int track);
+
+// Bus settings that put its output on the stream track, keeping the tracks it
+// already feeds. If the stream sends the bus's send track, the send moves to
+// the highest free track.
+struct BusTracks {
+	int sendTrack = 6;
+	uint32_t outputMask = 1;
+};
+BusTracks busTracksFor(int sendTrack, uint32_t outputMask, int streamTrack);
 
 // Picture thresholds (also used by the sampler).
 constexpr double kBlackWarnSec = 3.0;   // black this long → warning

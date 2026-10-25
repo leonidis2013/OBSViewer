@@ -100,13 +100,15 @@ public:
 	// Cheap; called by the meter widget on its own fast timer.
 	void refreshAudio();
 
+	// 0-based mix index the stream sends (its audio encoder, else the profile).
+	static int streamTrackIndex();
+
 signals:
 	void updated();
 
 private:
 	Metrics() = default;
 	void sample();
-	static int streamTrackIndex(); // 0-based mix index the stream sends
 	size_t meterTrackIndex() const;
 
 	QTimer *timer_ = nullptr;

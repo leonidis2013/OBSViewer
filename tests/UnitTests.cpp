@@ -263,6 +263,43 @@ static void testCountdown()
 	CHECK(!nextCountdown(7, 9 * 3600, t1030, 0).found);
 }
 
+static void testBusTracks()
+{
+	CHECK(busReachesTrack(6, 1, 1));
+	CHECK(!busReachesTrack(6, 1, 2));
+	CHECK(!busReachesTrack(1, 3, 1)); // stream sends the unprocessed send track
+	CHECK(busReachesTrack(1, 2, 2));
+	CHECK(!busReachesTrack(6, 0x3F, 7));
+
+	BusTracks t = busTracksFor(6, 1, 1); // already fine
+	CHECK(t.sendTrack == 6 && t.outputMask == 1);
+	t = busTracksFor(6, 1, 2); // stream on Track 2: add it, keep Track 1
+	CHECK(t.sendTrack == 6 && t.outputMask == 3);
+	t = busTracksFor(6, 1, 6); // stream sends the send track: move the send
+	CHECK(t.sendTrack == 5 && t.outputMask == (1u | 32u));
+	CHECK(busReachesTrack(t.sendTrack, t.outputMask, 6));
+	t = busTracksFor(1, 2, 1);
+	CHECK(t.sendTrack == 6 && t.outputMask == 3);
+	for (int send = 1; send <= 6; ++send)
+		for (uint32_t mask = 1; mask < 64; ++mask)
+			for (int stream = 1; stream <= 6; ++stream) {
+				if (mask & (1u << (send - 1)))
+					continue;
+				const BusTracks f = busTracksFor(send, mask, stream);
+				CHECK(busReachesTrack(f.sendTrack, f.outputMask, stream));
+				CHECK((f.outputMask & (1u << (f.sendTrack - 1))) == 0);
+			}
+
+	HealthInputs in;
+	CHECK(evaluateHealth(in).levelOf("Master bus") == Level::Off); // bus off: no check
+	in.busActive = true;
+	CHECK(evaluateHealth(in).levelOf("Master bus") == Level::Good);
+	in.streamTrack = 2;
+	CHECK(evaluateHealth(in).levelOf("Master bus") == Level::Warn);
+	in.streaming = true;
+	CHECK(evaluateHealth(in).levelOf("Master bus") == Level::Bad);
+}
+
 static void testPictureHealth()
 {
 	HealthInputs in;
@@ -604,6 +641,7 @@ int main()
 	testAutoLayout();
 	testTransitionStrip();
 	testCountdown();
+	testBusTracks();
 	testPictureHealth();
 	testVersions();
 	testSelection();

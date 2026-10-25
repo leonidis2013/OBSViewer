@@ -1,7 +1,9 @@
 #include "ui/MasterBusWindow.hpp"
 
 #include "bus/Engine.hpp"
+#include "audio/StreamMonitor.hpp"
 #include "bus/MasterBus.hpp"
+#include "core/Health.hpp"
 #include "ui/Paint.hpp"
 #include "ui/SidePanel.hpp"
 #include "ui/Theme.hpp"
@@ -983,6 +985,28 @@ MasterBusPanel::MasterBusPanel(bool embedded, QWidget *parent) : QWidget(parent)
 	inputs_->setToolTip(QStringLiteral("Choose which sources go through the bus, and the bus tracks"));
 	sl->addWidget(inputs_);
 
+	// Shown when the bus output isn't on the track the stream sends.
+	trackWarn_ = new QFrame(strip);
+	trackWarn_->setObjectName(QStringLiteral("trackWarn"));
+	trackWarn_->setStyleSheet(QStringLiteral(
+		"QFrame#trackWarn { background: rgba(239, 76, 76, 0.12); border: 1px solid #EF4C4C; border-radius: 6px; }"
+		"QFrame#trackWarn QLabel { color: #D8DEE6; background: transparent; border: none; }"));
+	trackWarnText_ = new QLabel(trackWarn_);
+	trackWarnText_->setWordWrap(true);
+	auto *fix = new QPushButton(QStringLiteral("Fix"), trackWarn_);
+	fix->setToolTip(QStringLiteral("Send the bus output to the stream's track too"));
+	auto *wl = new QHBoxLayout(trackWarn_);
+	wl->setContentsMargins(8, 6, 6, 6);
+	wl->setSpacing(6);
+	wl->addWidget(trackWarnText_, 1);
+	wl->addWidget(fix);
+	trackWarn_->hide();
+	sl->addWidget(trackWarn_);
+	connect(fix, &QPushButton::clicked, this, [this] {
+		MasterBus::get().matchStreamTrack();
+		refreshAll();
+	});
+
 	sl->addWidget(divider(QStringLiteral("INSERTS"), strip));
 	slotsBox_ = new QWidget(strip);
 	slotsLayout_ = new QVBoxLayout(slotsBox_);
@@ -1003,6 +1027,17 @@ MasterBusPanel::MasterBusPanel(bool embedded, QWidget *parent) : QWidget(parent)
 
 	fader_ = new FaderMeter(strip);
 	sl->addWidget(fader_, 1);
+
+	listen_ = new QPushButton(QStringLiteral("Listen to Stream"), strip);
+	listen_->setObjectName(QStringLiteral("listen"));
+	listen_->setCheckable(true);
+	listen_->setStyleSheet(QStringLiteral(
+		"QPushButton#listen:checked { background-color: #4C8DFF; border-color: #4C8DFF; color: #0D1015; }"));
+	sl->addWidget(listen_);
+	connect(listen_, &QPushButton::clicked, this, [this](bool on) {
+		StreamMonitor::get().setListening(on);
+		refreshStatus();
+	});
 
 	footer_ = new QLabel(strip);
 	footer_->setProperty("dim", true);
@@ -1099,6 +1134,10 @@ MasterBusPanel::MasterBusPanel(bool embedded, QWidget *parent) : QWidget(parent)
 		const bus::Levels m = engine.masterLevels();
 		fader_->setLevels(m.post[0], m.post[1], total);
 
+		// The stream's track (a profile setting) is re-read twice a second.
+		if (++ticks_ % 12 == 0)
+			streamTrack_ = MasterBus::streamTrack();
+
 		// Another master bus view (window or viewer) changed something: catch up.
 		if (signature() != shownSignature_)
 			refreshAll();
@@ -1137,12 +1176,14 @@ std::string MasterBusPanel::signature()
 	const MasterBus &bus = MasterBus::get();
 	return std::to_string(bus::Engine::get().revision()) + "|" + std::to_string(bus.enabled()) + "|" +
 	       std::to_string(bus.running()) + "|" + std::to_string(bus.routedCount()) + "|" +
-	       std::to_string(bus.config().sendTrack) + "|" + std::to_string(bus.config().outputMask);
+	       std::to_string(bus.config().sendTrack) + "|" + std::to_string(bus.config().outputMask) + "|" +
+	       std::to_string(streamTrack_) + "|" + std::to_string(StreamMonitor::get().listening());
 }
 
 void MasterBusPanel::showEvent(QShowEvent *event)
 {
 	QWidget::showEvent(event);
+	streamTrack_ = MasterBus::streamTrack();
 	refreshAll();
 	meterTimer_->start();
 }
@@ -1250,6 +1291,24 @@ void MasterBusPanel::refreshStatus()
 	inputs_->setTexts(QStringLiteral("Inputs"), routed == 1 ? QStringLiteral("1 source") : QStringLiteral("%1 sources").arg(routed));
 
 	const auto &cfg = bus.config();
+	const bool missing = bus.running() && routed > 0 &&
+			     !busReachesTrack(cfg.sendTrack, cfg.outputMask, streamTrack_);
+	trackWarn_->setVisible(missing);
+	if (missing)
+		trackWarnText_->setText(QStringLiteral("The stream sends Track %1, but the bus doesn't output there. "
+						       "Routed sources are missing from the stream.")
+						.arg(streamTrack_));
+
+	const StreamMonitor &mon = StreamMonitor::get();
+	listen_->setChecked(mon.listening());
+	listen_->setToolTip(
+		mon.listening()
+			? QStringLiteral("Playing the stream's Track %1 (what viewers hear) through OBS's monitoring device. "
+					 "Click to stop.")
+				  .arg(mon.track())
+			: QStringLiteral("Hear exactly what the stream sends, plugins included, through OBS's monitoring "
+					 "device (Settings ▸ Audio ▸ Advanced). Slightly behind live: for checking the mix."));
+
 	QString outs;
 	for (int t = 0; t < 6; ++t)
 		if (cfg.outputMask & (1u << t))

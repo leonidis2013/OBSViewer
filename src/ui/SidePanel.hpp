@@ -6,6 +6,7 @@
 #include <functional>
 
 class QHBoxLayout;
+class QPushButton;
 class QStackedWidget;
 class QTimer;
 
@@ -84,6 +85,7 @@ private:
 	StatLines *recordLines_ = nullptr;
 	AudioMeterWidget *meter_ = nullptr;
 	LoudnessHistory *loudness_ = nullptr;
+	QPushButton *listen_ = nullptr;
 	HealthList *details_ = nullptr;
 	HealthList *perfDetails_ = nullptr;
 	QTimer *blinkTimer_ = nullptr;

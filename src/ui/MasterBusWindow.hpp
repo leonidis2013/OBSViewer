@@ -3,11 +3,14 @@
 #include <QDialog>
 #include <QWidget>
 
+#include "bus/MasterBus.hpp"
+
 #include <functional>
 
 #include <string>
 #include <vector>
 
+class QFrame;
 class QLabel;
 class QLineEdit;
 class QPushButton;
@@ -68,6 +71,11 @@ private:
 	DbKnob *trim_ = nullptr;
 	FaderMeter *fader_ = nullptr;
 	QLabel *footer_ = nullptr;
+	QFrame *trackWarn_ = nullptr;
+	QLabel *trackWarnText_ = nullptr;
+	QPushButton *listen_ = nullptr;
+	int streamTrack_ = MasterBus::streamTrack();
+	unsigned ticks_ = 0;
 	int selected_ = -1;
 
 	// browser

@@ -176,10 +176,46 @@ HealthReport evaluateHealth(const HealthInputs &in)
 		add("Picture", Level::Good, "Program picture OK");
 	}
 
+	// ---- Master bus reaches the stream ----
+	if (in.busActive) {
+		if (busReachesTrack(in.busSendTrack, in.busOutputMask, in.streamTrack))
+			add("Master bus", Level::Good, fmt("Reaches the stream (Track %.0f)", in.streamTrack));
+		else
+			add("Master bus", in.streaming ? Level::Bad : Level::Warn,
+			    fmt("Not on the stream's Track %.0f: routed sources are missing (fix in the bus)", in.streamTrack));
+	}
+
 	for (const auto &c : r.checks)
 		if (c.level > r.overall)
 			r.overall = c.level;
 	return r;
+}
+
+bool busReachesTrack(int sendTrack, uint32_t outputMask, int track)
+{
+	if (track < 1 || track > 6 || track == sendTrack)
+		return false;
+	return (outputMask & (1u << (track - 1))) != 0;
+}
+
+BusTracks busTracksFor(int sendTrack, uint32_t outputMask, int streamTrack)
+{
+	BusTracks t{sendTrack, outputMask & 0x3Fu};
+	if (streamTrack < 1 || streamTrack > 6)
+		return t;
+	if (t.sendTrack == streamTrack) {
+		// Highest track not already used; if every track is, the highest other one
+		// (it stops being an output).
+		t.sendTrack = streamTrack == 6 ? 5 : 6;
+		for (int c = 6; c >= 1; --c)
+			if (c != streamTrack && !(t.outputMask & (1u << (c - 1)))) {
+				t.sendTrack = c;
+				break;
+			}
+	}
+	t.outputMask |= 1u << (streamTrack - 1);
+	t.outputMask &= ~(1u << (t.sendTrack - 1));
+	return t;
 }
 
 HealthReport evaluatePerformance(const PerfInputs &in)

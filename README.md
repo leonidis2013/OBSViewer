@@ -71,6 +71,17 @@ processes that track through your chain and puts the result back on Track 1.
 Unticking a source, or turning the bus off, restores its tracks exactly. Don't use
 the bus input track for anything else. Plugin latency is compensated automatically.
 
+The stream only sends one track (OBS ▸ Settings ▸ Output ▸ Streaming ▸ Audio Track;
+Simple mode = Track 1). If the bus doesn't output there, the strip shows a red
+warning with a **Fix** button, and the health light warns.
+
+**Listen to Stream** (in the bus strip, and under Programme audio in the side bar)
+plays exactly what the stream sends, plugins included, through OBS's monitoring
+device (Settings ▸ Audio ▸ Advanced ▸ Monitoring Device), e.g. your headphones. It is
+slightly behind the live sound: use it to check the mix, not as an in-ear monitor.
+Sources set to "Monitor and Output" in Advanced Audio Properties are heard on their
+own as well, so set them to "Monitor Off" while you listen.
+
 ## Updates
 
 OBSViewer checks for a new version when OBS starts (at most every 12 hours), or

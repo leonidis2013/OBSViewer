@@ -42,6 +42,11 @@ public:
 	const Config &config() const { return config_; }
 	void setSendTrack(int track);
 	void setOutputMask(uint32_t mask);
+	// The track the stream sends (1-6), and whether the bus output lands on it.
+	static int streamTrack();
+	bool reachesStream() const;
+	// Put the bus output on the stream's track (moving the send track if needed).
+	void matchStreamTrack();
 
 	struct SourceRow {
 		std::string uuid;
@@ -75,6 +80,7 @@ private:
 	void restoreAllRouting();
 	void loadRoutes(obs_data_t *data);
 	void applyOutputMixers();
+	void reapplyRouting(); // routed sources: original tracks minus outputs, plus send
 	static void onMix(void *param, size_t mixIdx, struct audio_data *data);
 
 	Config config_;

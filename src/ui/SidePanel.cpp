@@ -1,5 +1,6 @@
 #include "ui/SidePanel.hpp"
 
+#include "audio/StreamMonitor.hpp"
 #include "core/Countdown.hpp"
 #include "core/Settings.hpp"
 #include "metrics/Metrics.hpp"
@@ -14,6 +15,7 @@
 #include <QMessageBox>
 #include <QMouseEvent>
 #include <QPaintEvent>
+#include <QPushButton>
 #include <QStackedWidget>
 #include <QTime>
 #include <QDate>
@@ -978,6 +980,21 @@ SidePanel::SidePanel(QWidget *parent) : QWidget(parent)
 	loudness_ = new LoudnessHistory(audioSection_);
 	audioSection_->addChild(meter_, 1);
 	audioSection_->addChild(loudness_);
+	listen_ = new QPushButton(QStringLiteral("Listen to Stream"), audioSection_);
+	listen_->setCheckable(true);
+	listen_->setCursor(Qt::PointingHandCursor);
+	listen_->setToolTip(QStringLiteral("Hear exactly what the stream sends (master bus included) through OBS's "
+					   "monitoring device, Settings ▸ Audio ▸ Advanced. Slightly behind live."));
+	listen_->setStyleSheet(QStringLiteral(
+		"QPushButton { background-color: #1B2129; color: #D8DEE6; border: 1px solid #252C36; border-radius: 5px;"
+		" padding: 4px 8px; font-weight: 600; }"
+		"QPushButton:hover { background-color: #222933; border-color: #4C5561; }"
+		"QPushButton:checked { background-color: #4C8DFF; border-color: #4C8DFF; color: #0D1015; }"));
+	audioSection_->addChild(listen_);
+	connect(listen_, &QPushButton::clicked, this, [this](bool on) {
+		StreamMonitor::get().setListening(on);
+		listen_->setChecked(StreamMonitor::get().listening());
+	});
 
 	cl->addWidget(clockSection_);
 	cl->addWidget(streamSection_);
@@ -1069,6 +1086,7 @@ void SidePanel::refresh()
 	const HealthReport &h = m.health;
 
 	health_->setState(h, stack_->currentIndex() == 1, blink_, s);
+	listen_->setChecked(StreamMonitor::get().listening());
 	details_->setState(h, s, QStringLiteral("Health checks"), theme::kAccentGreen);
 	perf_->setState(m.performance, stack_->currentIndex() == 2, blink_, s,
 			QStringLiteral("%1 fps · %2 ms").arg(m.perf.fpsActive, 0, 'f', 2).arg(m.perf.renderMs, 0, 'f', 1));

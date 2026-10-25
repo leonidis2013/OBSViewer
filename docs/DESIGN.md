@@ -440,6 +440,25 @@ other sources  ─────────────────────�
   their tracks are restored automatically.
 - Track assignments are ordinary OBS settings saved in the scene collection, and
   are visible in Edit ▸ Advanced Audio Properties.
+- **Stream-track check (0.8.2)**: the stream only sends one track
+  (`Metrics::streamTrackIndex()`: the live audio encoder's mixer, else the profile's
+  `AdvOut/TrackIndex`, Simple mode = 1). With the bus running and sources routed,
+  health check "Master bus" is Good when the output mask holds that track (and it
+  isn't the send track), else Warn (Bad while streaming). The strip shows a red row
+  with **Fix** → `busTracksFor()`: add the stream track to the outputs; if the stream
+  sends the send track, move the send to the highest free track. Changing the output
+  mask now re-applies routing (routed sources = original − outputs + send), so a
+  newly added output track never carries a routed source dry as well.
+
+### 8.1a Listen to stream (0.8.2)
+
+`StreamMonitor`: raw audio callback on the stream track (final mix, bus included)
+→ a private source on no track (`mixers = 0`) with monitoring "Monitor Only", on
+global output channel 62 (OBS's monitor only plays active sources). It plays through
+OBS's monitoring device; monitor-only audio is never placed in the mix. Follows the
+stream track (polled twice a second); off at OBS start. Toggles: **Listen to
+Stream** in the bus strip and under Programme audio in the side bar. Latency: one or
+two audio ticks plus the device buffer.
 
 ### 8.2 Plugin host
 

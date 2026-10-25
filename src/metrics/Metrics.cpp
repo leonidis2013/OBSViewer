@@ -2,6 +2,7 @@
 #include "metrics/PictureMonitor.hpp"
 
 #include "audio/meters/LoudnessPresets.h"
+#include "bus/MasterBus.hpp"
 #include "core/Settings.hpp"
 
 #include <obs.h>
@@ -361,6 +362,13 @@ void Metrics::sample()
 	in.targetLufs = targetLufs();
 	in.toleranceLu = toleranceLu();
 	in.ceilingDbtp = ceilingDbtp();
+	{
+		const MasterBus &bus = MasterBus::get();
+		in.busActive = bus.running() && bus.routedCount() > 0;
+		in.busSendTrack = bus.config().sendTrack;
+		in.busOutputMask = bus.config().outputMask;
+		in.streamTrack = streamTrackIndex() + 1;
+	}
 	health = evaluateHealth(in);
 
 	emit updated();
