@@ -456,6 +456,24 @@ other sources  ─────────────────────�
   mask now re-applies routing (routed sources = original − outputs + send), so a
   newly added output track never carries a routed source dry as well.
 
+### 8.0 YouTube stream title (0.10.0)
+
+`StreamTitle` (src/stream) runs a fetch on a worker thread every 60 s while
+streaming, every 3 min otherwise, and 3 s after the stream starts:
+1. `broadcast_id` in the streaming service's settings (OBS sets it when connected to
+   a YouTube account and using Manage Broadcast) → `youtube.com/oembed` → title
+   (public / unlisted only).
+2. Settings `youtube_channel` → `youtubeLiveUrl` (`@handle`, `UC…` id or channel
+   URL → `…/live`) → the page's canonical `watch?v=` id → its `og:title`
+   (core/YouTube, unit-tested). No watch id = no live or upcoming stream.
+3. The profile's `[YouTube] Title` (Manage Broadcast's remembered title), for a
+   YouTube service only.
+`ViewerState::setStreamTitle` builds a text label; the renderer then reserves a
+banner (`titleBannerHeight`: label band + 6 px) above the tiles and draws it like a
+Program title band ("YOUTUBE" + title field, red tab while streaming).
+`ViewerDisplay` shifts its hit-test tiles by the same amount. Settings:
+`show_stream_title` (true), `youtube_channel` ("").
+
 ### 8.1b Routing window (0.9.0)
 
 The strip's **Routing** button opens `RoutingDialog` (one shared, non-modal window):

@@ -238,6 +238,14 @@ void ViewerState::setSafeAreas(bool on)
 	safeAreas_ = on;
 }
 
+void ViewerState::setStreamTitle(const std::string &title)
+{
+	if (title == streamTitle_)
+		return;
+	streamTitle_ = title;
+	refresh(); // builds the label
+}
+
 void ViewerState::setShowTransitions(bool on)
 {
 	std::lock_guard<std::mutex> lock(mutex_);
@@ -313,6 +321,7 @@ void ViewerState::refresh()
 	const bool rebuildNamed = namesChanged || heightChanged;
 	const bool rebuildStatic = heightChanged;
 	const bool rebuildTransition = heightChanged || transitionText != transitionText_;
+	const bool rebuildTitle = heightChanged || streamTitle_ != streamTitleBuilt_;
 	if (rebuildNamed) {
 		// Fixed titles plus the scene names on their own, so the titles never move.
 		newLabels.program = createLabel("PROGRAM", height, kTileLabelScale);
@@ -328,6 +337,10 @@ void ViewerState::refresh()
 		newLabels.cut = createLabel("CUT", height, kTileLabelScale);
 		newLabels.autoTake = createLabel("AUTO", height, kTileLabelScale);
 	}
+	if (rebuildTitle && !streamTitle_.empty())
+		newLabels.streamTitle = createLabel(streamTitle_, height, kTileLabelScale);
+	if (rebuildStatic)
+		newLabels.youtube = createLabel("YOUTUBE", height, kTileLabelScale);
 	if (rebuildTransition) {
 		newLabels.transitionName =
 			createLabel(transitionName.empty() ? std::string("—") : transitionName, height, kTileLabelScale);
@@ -417,7 +430,10 @@ void ViewerState::refresh()
 			oldSources.push_back(std::exchange(labels_.muted, newLabels.muted));
 			oldSources.push_back(std::exchange(labels_.cut, newLabels.cut));
 			oldSources.push_back(std::exchange(labels_.autoTake, newLabels.autoTake));
+			oldSources.push_back(std::exchange(labels_.youtube, newLabels.youtube));
 		}
+		if (rebuildTitle)
+			oldSources.push_back(std::exchange(labels_.streamTitle, newLabels.streamTitle));
 		if (rebuildTransition) {
 			oldSources.push_back(std::exchange(labels_.transitionName, newLabels.transitionName));
 			oldSources.push_back(std::exchange(labels_.transitionTime, newLabels.transitionTime));
@@ -434,6 +450,7 @@ void ViewerState::refresh()
 	programName_ = programName;
 	previewName_ = previewName;
 	transitionText_ = transitionText;
+	streamTitleBuilt_ = streamTitle_;
 	haveProgramNames_ = true;
 	labelHeight_ = height;
 	baseWidthMain_ = width;
@@ -553,7 +570,8 @@ void ViewerState::clear()
 		oldWeak.push_back(std::exchange(transition_, nullptr));
 		for (obs_source_t **l : {&labels_.program, &labels_.preview, &labels_.previewName, &labels_.rec,
 					 &labels_.programName, &labels_.studioOff, &labels_.muted, &labels_.cut,
-					 &labels_.autoTake, &labels_.transitionName, &labels_.transitionTime})
+					 &labels_.autoTake, &labels_.transitionName, &labels_.transitionTime,
+					 &labels_.streamTitle, &labels_.youtube})
 			oldSources.push_back(std::exchange(*l, nullptr));
 		sceneAudio_.clear();
 		previewAudio_.clear();
@@ -567,6 +585,7 @@ void ViewerState::clear()
 	programName_.clear();
 	previewName_.clear();
 	transitionText_.clear();
+	streamTitleBuilt_.clear();
 	haveProgramNames_ = false;
 	labelHeight_ = 0;
 	// views_ is kept, so scenes are marked showing again when the next collection loads.
@@ -598,6 +617,8 @@ ViewerState::Snapshot ViewerState::acquire()
 	snap.transitionNameLabel = obs_source_get_ref(labels_.transitionName);
 	snap.transitionTimeLabel = obs_source_get_ref(labels_.transitionTime);
 	snap.showTransitions = showTransitions_;
+	snap.streamTitleLabel = obs_source_get_ref(labels_.streamTitle);
+	snap.youtubeLabel = obs_source_get_ref(labels_.youtube);
 	snap.showTileMeters = showTileMeters_;
 	if (showTileMeters_) {
 		snap.sceneAudio = sceneAudio_;
@@ -625,7 +646,8 @@ void ViewerState::release(Snapshot &snap)
 		obs_source_release(s);
 	for (obs_source_t *s : {snap.programLabel, snap.previewLabel, snap.previewNameLabel, snap.recLabel,
 				snap.programNameLabel, snap.studioOffLabel, snap.mutedLabel, snap.transition, snap.cutLabel,
-				snap.autoLabel, snap.transitionNameLabel, snap.transitionTimeLabel})
+				snap.autoLabel, snap.transitionNameLabel, snap.transitionTimeLabel, snap.streamTitleLabel,
+				snap.youtubeLabel})
 		obs_source_release(s);
 	snap = Snapshot{};
 }

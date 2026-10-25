@@ -6,6 +6,7 @@
 #include "core/Settings.hpp"
 #include "ui/ControlDock.hpp"
 #include "audio/StreamMonitor.hpp"
+#include "stream/StreamTitle.hpp"
 #include "ui/MasterBusWindow.hpp"
 #include "metrics/Metrics.hpp"
 #include "ui/Menu.hpp"
@@ -74,7 +75,9 @@ void App::init()
 		ViewerState::get().poll();
 		MasterBus::get().checkLatency();
 		StreamMonitor::get().poll();
+		ViewerState::get().setStreamTitle(StreamTitle::get().shownTitle());
 	});
+	StreamTitle::get().start();
 
 	obs_frontend_add_event_callback(&App::onFrontendEvent, this);
 }
@@ -87,6 +90,7 @@ void App::shutdown()
 	obs_frontend_remove_event_callback(&App::onFrontendEvent, this);
 	Metrics::get().stop();
 	StreamMonitor::get().shutdown();
+	StreamTitle::get().stop();
 	MasterBus::get().unload();
 	if (pollTimer_)
 		pollTimer_->stop();
@@ -163,6 +167,7 @@ void App::handleFrontendEvent(enum obs_frontend_event event)
 		if (masterBus_)
 			masterBus_->close();
 		StreamMonitor::get().shutdown();
+	StreamTitle::get().stop();
 	MasterBus::get().unload();
 		if (pollTimer_)
 			pollTimer_->stop();

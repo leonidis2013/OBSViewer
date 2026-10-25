@@ -4,6 +4,7 @@
 #include "audio/meters/LoudnessPresets.h"
 #include "core/Countdown.hpp"
 #include "core/Settings.hpp"
+#include "stream/StreamTitle.hpp"
 #include "ui/Theme.hpp"
 #include "update/Keychain.hpp"
 #include "update/Updater.hpp"
@@ -24,6 +25,7 @@
 #include <QPushButton>
 #include <QScrollArea>
 #include <QTimeEdit>
+#include <QTimer>
 #include <QVBoxLayout>
 
 #include <algorithm>
@@ -128,6 +130,47 @@ SettingsDialog::SettingsDialog(QWidget *parent) : QDialog(parent)
 		for (QCheckBox *box : countdownDays_)
 			box->setEnabled(on);
 	});
+	// ---- YouTube ----
+	auto *ytGroup = new QGroupBox(tr("YouTube"), this);
+	auto *ytForm = new QFormLayout(ytGroup);
+	showStreamTitle_ = new QCheckBox(tr("Show the YouTube stream's title on the multiview and in the controls dock"),
+					 ytGroup);
+	youtubeChannel_ = new QLineEdit(ytGroup);
+	youtubeChannel_->setPlaceholderText(tr("@yourchurch (optional)"));
+	youtubeChannel_->setToolTip(tr("Used when OBS isn't connected to your YouTube account, or the stream is "
+				       "scheduled in YouTube Studio: the title comes from the channel's live page."));
+	auto *ytHelp = new QLabel(tr("If OBS is connected to your YouTube account (Settings ▸ Stream), the title is "
+				     "found automatically. Otherwise enter your channel's @handle."),
+				  ytGroup);
+	ytHelp->setWordWrap(true);
+	ytHelp->setProperty("dim", true);
+	youtubeStatus_ = new QLabel(ytGroup);
+	youtubeStatus_->setWordWrap(true);
+	youtubeStatus_->setProperty("dim", true);
+	auto *ytCheck = new QPushButton(tr("Check Now"), ytGroup);
+	ytForm->addRow(QString(), showStreamTitle_);
+	ytForm->addRow(QString(), ytHelp);
+	ytForm->addRow(tr("Channel"), youtubeChannel_);
+	ytForm->addRow(QString(), youtubeStatus_);
+	ytForm->addRow(QString(), ytCheck);
+	connect(ytCheck, &QPushButton::clicked, this, [this] {
+		Settings::get().youtubeChannel = youtubeChannel_->text().trimmed().toStdString();
+		Settings::get().showStreamTitle = true;
+		showStreamTitle_->setChecked(true);
+		youtubeStatus_->setText(tr("Checking…"));
+		StreamTitle::get().refreshNow();
+	});
+	auto *ytTimer = new QTimer(this);
+	ytTimer->setInterval(1000);
+	connect(ytTimer, &QTimer::timeout, this, [this] {
+		const QString title = QString::fromStdString(StreamTitle::get().shownTitle());
+		const QString status = QString::fromStdString(StreamTitle::get().status());
+		if (status.isEmpty())
+			return;
+		youtubeStatus_->setText(title.isEmpty() ? status : QStringLiteral("“%1” · %2").arg(title, status));
+	});
+	ytTimer->start();
+
 	auto describe = [this](QComboBox *box) {
 		layoutHelp_->setText(QString::fromStdString(layoutById(box->currentData().toString().toStdString()).description));
 	};
@@ -210,6 +253,7 @@ SettingsDialog::SettingsDialog(QWidget *parent) : QDialog(parent)
 	cl->setSpacing(12);
 	cl->addWidget(viewGroup);
 	cl->addWidget(clockGroup);
+	cl->addWidget(ytGroup);
 	cl->addWidget(audioGroup);
 	cl->addWidget(updateGroup);
 	cl->addStretch(1);
@@ -254,6 +298,8 @@ void SettingsDialog::load()
 	busEmbedded_->setChecked(s.masterBusEmbedded);
 	safeAreas_->setChecked(s.safeAreas);
 	showTransitions_->setChecked(s.showTransitions);
+	showStreamTitle_->setChecked(s.showStreamTitle);
+	youtubeChannel_->setText(QString::fromStdString(s.youtubeChannel));
 	hideObsPreview_->setChecked(s.hideObsPreview);
 	warnFrozen_->setChecked(s.warnFrozen);
 	showClock_->setChecked(s.showClock);
@@ -297,6 +343,10 @@ void SettingsDialog::apply()
 	s.masterBusEmbedded = busEmbedded_->isChecked();
 	s.safeAreas = safeAreas_->isChecked();
 	s.showTransitions = showTransitions_->isChecked();
+	s.showStreamTitle = showStreamTitle_->isChecked();
+	const std::string channel = youtubeChannel_->text().trimmed().toStdString();
+	const bool channelChanged = channel != s.youtubeChannel;
+	s.youtubeChannel = channel;
 	s.hideObsPreview = hideObsPreview_->isChecked();
 	s.warnFrozen = warnFrozen_->isChecked();
 	s.showClock = showClock_->isChecked();
@@ -324,6 +374,8 @@ void SettingsDialog::apply()
 
 	s.save();
 	App::get().applySettings();
+	if (channelChanged)
+		StreamTitle::get().refreshNow();
 }
 
 } // namespace obsviewer

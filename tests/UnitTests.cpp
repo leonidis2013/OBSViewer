@@ -10,6 +10,7 @@
 #include "core/History.hpp"
 #include "core/LevelMath.hpp"
 #include "core/Version.hpp"
+#include "core/YouTube.hpp"
 #include "update/ReleaseInfo.hpp"
 #include "viewer/Layouts.hpp"
 
@@ -298,6 +299,36 @@ static void testBusTracks()
 	CHECK(evaluateHealth(in).levelOf("Master bus") == Level::Warn);
 	in.streaming = true;
 	CHECK(evaluateHealth(in).levelOf("Master bus") == Level::Bad);
+}
+
+static void testYouTube()
+{
+	using namespace youtube;
+	CHECK(isVideoId("dQw4w9WgXcQ"));
+	CHECK(!isVideoId("dQw4w9WgXc"));
+	CHECK(!isVideoId("dQw4w9WgX!Q"));
+	CHECK(liveUrlFor("@rhcc") == "https://www.youtube.com/@rhcc/live");
+	CHECK(liveUrlFor("  rhcc ") == "https://www.youtube.com/@rhcc/live");
+	CHECK(liveUrlFor("https://www.youtube.com/@rhcc/videos") == "https://www.youtube.com/@rhcc/live");
+	CHECK(liveUrlFor("youtube.com/@rhcc/live/") == "https://www.youtube.com/@rhcc/live");
+	CHECK(liveUrlFor("UCabcdefghijklmnopqrstuv") == "https://www.youtube.com/channel/UCabcdefghijklmnopqrstuv/live");
+	CHECK(liveUrlFor("https://www.youtube.com/channel/UCabcdefghijklmnopqrstuv/featured") ==
+	      "https://www.youtube.com/channel/UCabcdefghijklmnopqrstuv/live");
+	CHECK(liveUrlFor("").empty());
+	CHECK(liveUrlFor("https://www.youtube.com/").empty());
+	CHECK(liveUrlFor("@").empty());
+	CHECK(liveUrlFor("bad name with spaces").empty());
+	CHECK(liveUrlFor("@x\"onload=1").empty());
+
+	const std::string live = "<html><head><link rel=\"canonical\" href=\"https://www.youtube.com/watch?v=abcDEF12345\">"
+				 "<meta property=\"og:title\" content=\"Sunday Worship &amp; Prayer &#8211; Oct 26 &#x1F64F;\">";
+	CHECK(videoIdFromPage(live) == "abcDEF12345");
+	CHECK(ogTitle(live) == "Sunday Worship & Prayer \xE2\x80\x93 Oct 26 \xF0\x9F\x99\x8F");
+	const std::string offline = "<link rel=\"canonical\" href=\"https://www.youtube.com/channel/UCxyz\">";
+	CHECK(videoIdFromPage(offline).empty());
+	CHECK(ogTitle("<p>nothing</p>").empty());
+	CHECK(decodeEntities("a &unknown; b & c") == "a &unknown; b & c");
+	CHECK(decodeEntities("&quot;Hi&quot; &#39;x&#39;") == "\"Hi\" 'x'");
 }
 
 static void testPictureHealth()
@@ -642,6 +673,7 @@ int main()
 	testTransitionStrip();
 	testCountdown();
 	testBusTracks();
+	testYouTube();
 	testPictureHealth();
 	testVersions();
 	testSelection();

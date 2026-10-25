@@ -174,7 +174,12 @@ std::vector<PlacedTile> placeFor(const QWidget *w, const std::string &id, const 
 	params.gap = 4.0f;
 	params.centerStrip = settings.showTransitions ? transitionStripWidth(id, params.width) : 0.0f;
 	params.sceneCount = id == kAutoLayoutId ? static_cast<int>(map.size()) : state.sceneCount();
-	return placeTiles(id, params);
+	const float banner = state.hasStreamTitle() ? titleBannerHeight(params.height) : 0.0f;
+	params.height -= banner;
+	std::vector<PlacedTile> tiles = placeTiles(id, params);
+	if (banner > 0.0f)
+		shiftTiles(tiles, 0.0f, banner);
+	return tiles;
 }
 
 } // namespace

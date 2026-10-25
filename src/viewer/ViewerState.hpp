@@ -46,6 +46,9 @@ public:
 		obs_source_t *transitionNameLabel = nullptr; // e.g. "Fade"
 		obs_source_t *transitionTimeLabel = nullptr; // e.g. "300 ms"
 		bool showTransitions = true;
+		// Stream title banner (shown when streamTitleLabel is set).
+		obs_source_t *streamTitleLabel = nullptr;
+		obs_source_t *youtubeLabel = nullptr;
 		std::vector<AudioList> sceneAudio; // parallel to scenes
 		AudioList previewAudio;
 		bool showTileMeters = true;
@@ -82,6 +85,9 @@ public:
 	void updateViewScenes();
 	void setSafeAreas(bool on);
 	void setShowTransitions(bool on);
+	// YouTube stream title for the banner ("" = no banner). Main thread.
+	void setStreamTitle(const std::string &title);
+	bool hasStreamTitle() const { return !streamTitle_.empty(); }
 	// Scene index for each scene view of a layout (see Snapshot::viewMaps). Main thread.
 	std::vector<int> viewMap(const std::string &layoutId) const;
 	void setShowLabels(bool show);
@@ -111,6 +117,8 @@ private:
 		obs_source_t *autoTake = nullptr;
 		obs_source_t *transitionName = nullptr;
 		obs_source_t *transitionTime = nullptr;
+		obs_source_t *streamTitle = nullptr;
+		obs_source_t *youtube = nullptr;
 	};
 	struct RenderScene {
 		obs_weak_source_t *weak = nullptr;
@@ -150,6 +158,8 @@ private:
 	std::string programName_;
 	std::string previewName_;
 	std::string transitionText_; // name + "\n" + time the labels were built for
+	std::string streamTitle_;      // wanted
+	std::string streamTitleBuilt_; // label built for
 	bool haveProgramNames_ = false;
 	uint32_t labelHeight_ = 0; // canvas height the labels were built for
 	uint32_t baseWidthMain_ = 1920;

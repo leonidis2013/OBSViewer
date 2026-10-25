@@ -61,6 +61,8 @@ void Settings::load()
 	safeAreas = getBool(data, "safe_areas", defaults.safeAreas);
 	hideObsPreview = getBool(data, "hide_obs_preview", defaults.hideObsPreview);
 	showTransitions = getBool(data, "show_transitions", defaults.showTransitions);
+	showStreamTitle = getBool(data, "show_stream_title", defaults.showStreamTitle);
+	youtubeChannel = getString(data, "youtube_channel", defaults.youtubeChannel);
 	showClock = getBool(data, "show_clock", defaults.showClock);
 	countdownOn = getBool(data, "countdown_on", defaults.countdownOn);
 	if (obs_data_has_user_value(data, "countdown_minutes"))
@@ -154,6 +156,8 @@ void Settings::save() const
 	obs_data_set_bool(data, "warn_frozen", warnFrozen);
 	obs_data_set_bool(data, "safe_areas", safeAreas);
 	obs_data_set_bool(data, "show_transitions", showTransitions);
+	obs_data_set_bool(data, "show_stream_title", showStreamTitle);
+	obs_data_set_string(data, "youtube_channel", youtubeChannel.c_str());
 	obs_data_set_bool(data, "hide_obs_preview", hideObsPreview);
 	obs_data_set_bool(data, "show_clock", showClock);
 	obs_data_set_bool(data, "countdown_on", countdownOn);

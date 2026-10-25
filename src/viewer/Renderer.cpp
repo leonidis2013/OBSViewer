@@ -429,6 +429,9 @@ void Renderer::render(const std::string &layoutId, uint32_t cx, uint32_t cy, flo
 	params.labelHeight = snap.showLabels ? labelBandHeight(H) : 0.0f;
 	params.gap = 4.0f;
 	params.centerStrip = snap.showTransitions ? transitionStripWidth(layoutId, W) : 0.0f;
+	// Stream title banner across the top: the tiles go below it.
+	const float banner = snap.streamTitleLabel ? titleBannerHeight(H) : 0.0f;
+	params.height = H - banner;
 	// Which scene each view shows (Settings / right-click ▸ This View Shows).
 	const std::string &resolvedId = layoutById(layoutId).id;
 	const std::vector<int> *viewMap = nullptr;
@@ -439,7 +442,9 @@ void Renderer::render(const std::string &layoutId, uint32_t cx, uint32_t cy, flo
 	}
 	params.sceneCount = viewMap && resolvedId == kAutoLayoutId ? static_cast<int>(viewMap->size())
 								      : static_cast<int>(snap.scenes.size());
-	const std::vector<PlacedTile> tiles = placeTiles(layoutId, params);
+	std::vector<PlacedTile> tiles = placeTiles(layoutId, params);
+	if (banner > 0.0f)
+		shiftTiles(tiles, 0.0f, banner);
 	const bool halfRate = resolvedId == kAutoLayoutId;
 	++cache.frame;
 
@@ -563,6 +568,20 @@ void Renderer::render(const std::string &layoutId, uint32_t cx, uint32_t cy, flo
 			if (previewFallback)
 				drawTileNote(snap.studioOffLabel, pic, pad, std::max(10.0f, pic.h * 0.08f));
 		}
+	}
+
+	if (banner > 0.0f && !tiles.empty()) {
+		// Same width as the tiles below it.
+		float left = W, right = 0.0f;
+		for (const PlacedTile &t : tiles) {
+			left = std::min(left, t.cell.x);
+			right = std::max(right, t.cell.x + t.cell.w);
+		}
+		const Rect band{left, 2.0f, right - left, banner - 6.0f};
+		const float titleWidth = snap.youtubeLabel ? static_cast<float>(obs_source_get_width(snap.youtubeLabel)) : 0.0f;
+		drawTitleBand(snap.youtubeLabel, snap.streamTitleLabel, snap.programLabel, titleWidth, band,
+			      snap.streaming ? theme::kBad : theme::kTextFaint);
+		drawFrame(band, px, theme::kBorder);
 	}
 
 	if (snap.showTransitions) {

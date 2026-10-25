@@ -4,10 +4,13 @@
 #include "bus/Engine.hpp"
 #include "bus/MasterBus.hpp"
 #include "core/Settings.hpp"
+#include "stream/StreamTitle.hpp"
 #include "ui/Menu.hpp"
 #include "ui/Theme.hpp"
 #include "ui/TransitionControls.hpp"
 #include "viewer/Layouts.hpp"
+
+#include <obs-frontend-api.h>
 
 #include <QComboBox>
 #include <QGridLayout>
@@ -62,6 +65,12 @@ QPushButton#busPower:checked { background-color: #3ECF6E; border-color: #3ECF6E;
 	statusRow->setSpacing(8);
 	statusRow->addWidget(dot_);
 	statusRow->addWidget(status_, 1);
+
+	streamTitle_ = new QLabel(this);
+	streamTitle_->setWordWrap(true);
+	streamTitle_->setTextFormat(Qt::RichText);
+	streamTitle_->setToolTip(QStringLiteral("The YouTube stream's title (Settings ▸ YouTube)"));
+	streamTitle_->hide();
 
 	window_ = new QPushButton(QStringLiteral("Window"), this);
 	window_->setCheckable(true);
@@ -127,6 +136,7 @@ QPushButton#busPower:checked { background-color: #3ECF6E; border-color: #3ECF6E;
 	layout->setContentsMargins(8, 8, 8, 8);
 	layout->setSpacing(6);
 	layout->addLayout(statusRow);
+	layout->addWidget(streamTitle_);
 	layout->addLayout(viewerRow);
 	layout->addWidget(transitionCaption_);
 	layout->addWidget(transitions_);
@@ -201,6 +211,14 @@ void ControlDock::refresh()
 		color = theme::kAccentBlue;
 	}
 	status_->setText(text);
+	const QString title = QString::fromStdString(StreamTitle::get().shownTitle());
+	streamTitle_->setVisible(!title.isEmpty());
+	if (!title.isEmpty())
+		streamTitle_->setText(
+			QStringLiteral("<span style='color:%1; font-weight:600; font-size:10px;'>YOUTUBE</span>&nbsp; "
+				       "<span style='color:#D8DEE6;'>%2</span>")
+				.arg(obs_frontend_streaming_active() ? QStringLiteral("#EF4C4C") : QStringLiteral("#7C8794"),
+				     title.toHtmlEscaped()));
 	dot_->setStyleSheet(QStringLiteral("background: #%1; border-radius: 5px;").arg(color & 0xFFFFFF, 6, 16, QLatin1Char('0')));
 	window_->setChecked(open && !fullscreen);
 	fullscreen_->setChecked(fullscreen);

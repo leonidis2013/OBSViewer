@@ -23,6 +23,7 @@ private:
 
 	QLabel *dot_ = nullptr;
 	QLabel *status_ = nullptr;
+	QLabel *streamTitle_ = nullptr;
 	QPushButton *window_ = nullptr;
 	QToolButton *fullscreen_ = nullptr;
 	QPushButton *close_ = nullptr;

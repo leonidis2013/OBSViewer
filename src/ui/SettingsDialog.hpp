@@ -32,6 +32,9 @@ private:
 	QCheckBox *busEmbedded_ = nullptr;
 	QCheckBox *safeAreas_ = nullptr;
 	QCheckBox *showTransitions_ = nullptr;
+	QCheckBox *showStreamTitle_ = nullptr;
+	QLineEdit *youtubeChannel_ = nullptr;
+	QLabel *youtubeStatus_ = nullptr;
 	QCheckBox *hideObsPreview_ = nullptr;
 	QCheckBox *warnFrozen_ = nullptr;
 	QCheckBox *showClock_ = nullptr;

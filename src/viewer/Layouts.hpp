@@ -67,6 +67,12 @@ std::vector<PlacedTile> placeTiles(const std::string &layoutId, const PlaceParam
 // Index of the tile under (x, y), or -1.
 int tileAt(const std::vector<PlacedTile> &tiles, float x, float y);
 
+// Moves every tile (e.g. below a banner).
+void shiftTiles(std::vector<PlacedTile> &tiles, float dx, float dy);
+
+// Height of the stream-title banner across the top of a view this tall.
+float titleBannerHeight(float viewHeight);
+
 // Label band height for a view this tall (same units as PlaceParams).
 float labelBandHeight(float viewHeight);
 

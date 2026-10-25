@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.10.0] — 2026-10-25
+
+- **YouTube stream title** across the top of the multiview (a slim banner with a red tab while live) and in the OBSViewer Controls dock. It's found automatically when OBS is connected to your YouTube account (Settings ▸ Stream, then Manage Broadcast). Otherwise enter your channel's @handle in Settings ▸ YouTube and it's read from the channel's live page, which also finds streams scheduled in YouTube Studio. It's checked every minute while live and every 3 minutes otherwise. Settings ▸ YouTube shows where the title came from, or why there isn't one, and has **Check Now**. Turn it off there too.
+
+
 ## [0.9.0] — 2026-10-25
 
 - **Routing window with a wire diagram.** The master bus's **Inputs** button is now **Routing**. It opens a window that draws every audio source, the bus (its input track, plugin chain and outputs), and OBS's six tracks, with the stream's track marked **STREAM** and the recording's **REC**. Blue wires go through the bus; grey wires go straight to a track. Click a source to send it through the bus or back; click a track to make it a bus output. If the bus doesn't reach the stream's track, the STREAM tag turns red. The track settings (bus input track, outputs, All / None) are underneath.

@@ -47,6 +47,14 @@ To uninstall, quit OBS and delete
   upload, bitrate history, dropped frames and connection, Start recording with disk
   space, and the programme loudness meter with its 5-minute history.
 
+## YouTube title
+
+The live stream's title shows in a slim banner across the top of the multiview and
+in the controls dock. If OBS is connected to your YouTube account (Settings ▸
+Stream ▸ Connect Account, then Manage Broadcast) it's found automatically.
+Otherwise, or if you schedule streams in YouTube Studio, enter your channel's
+@handle in Settings ▸ YouTube. Public and unlisted streams work.
+
 ## Master bus
 
 Click the **mixer icon** at the top of the side bar (or Tools ▸ OBSViewer ▸ **Master

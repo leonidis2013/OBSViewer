@@ -244,6 +244,16 @@ int tileAt(const std::vector<PlacedTile> &tiles, float x, float y)
 	return -1;
 }
 
+void shiftTiles(std::vector<PlacedTile> &tiles, float dx, float dy)
+{
+	shift(tiles, dx, dy);
+}
+
+float titleBannerHeight(float viewHeight)
+{
+	return labelBandHeight(viewHeight) + 6.0f;
+}
+
 float labelBandHeight(float viewHeight)
 {
 	return std::clamp(std::round(viewHeight * 0.028f), 14.0f, 26.0f);
