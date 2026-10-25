@@ -170,6 +170,8 @@ target_sources(
     src/ui/SidePanel.cpp
     src/ui/SidePanel.hpp
     src/ui/MasterBusWindow.cpp
+    src/ui/RoutingView.cpp
+    src/ui/RoutingView.hpp
     src/ui/MasterBusWindow.hpp
     src/ui/Menu.cpp
     src/ui/Menu.hpp

@@ -60,8 +60,10 @@ and the window's dock-in icon puts it back.
 2. Build the chain: click an empty slot and pick a plugin, or select one in the
    browser and click **Insert**. Click a slot to open the plugin, click its dot to
    bypass it, drag slots to reorder, right-click to replace or remove.
-3. Switch the bus **ON**, then click **Inputs** and tick the sources that should go
-   through it.
+3. Switch the bus **ON**, then click **Routing**. A wire diagram shows every source,
+   the bus with its plugins, and OBS's six tracks (the stream's and recording's are
+   marked). Click a source to send it through the bus; click a track to make it a bus
+   output. Blue wires go through the bus, grey ones straight to a track.
 4. Set the **input trim** and the **output fader**; the meters show the output level
    and how much the chain is reducing.
 

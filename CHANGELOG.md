@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.9.0] — 2026-10-25
+
+- **Routing window with a wire diagram.** The master bus's **Inputs** button is now **Routing**. It opens a window that draws every audio source, the bus (its input track, plugin chain and outputs), and OBS's six tracks, with the stream's track marked **STREAM** and the recording's **REC**. Blue wires go through the bus; grey wires go straight to a track. Click a source to send it through the bus or back; click a track to make it a bus output. If the bus doesn't reach the stream's track, the STREAM tag turns red. The track settings (bus input track, outputs, All / None) are underneath.
+- **Clock:** while the countdown is running it's now the big number, with the time of day small underneath. When no countdown is close, the time of day stays big.
+
+
 ## [0.8.3] — 2026-10-25
 
 - **Fixed: the master bus processed audio but nothing left it.** The bus showed signal, but the stream (and the Programme audio meter) got nothing from it. OBS treated the bus's audio as arriving late, kept adding audio buffering until it hit its limit, then dropped it. The bus now hands its audio to the next mix block, so OBS always takes it. **Restart OBS after updating** (the update does this) so the extra buffering from before is cleared.

@@ -5,6 +5,7 @@
 #include "bus/MasterBus.hpp"
 #include "core/Health.hpp"
 #include "ui/Paint.hpp"
+#include "ui/RoutingView.hpp"
 #include "ui/SidePanel.hpp"
 #include "ui/Theme.hpp"
 
@@ -721,145 +722,6 @@ private:
 };
 
 // ---------------------------------------------------------------------------
-// Inputs popup: which sources go through the bus, and the bus tracks.
-class InputsPopup : public QFrame {
-public:
-	InputsPopup(QWidget *owner, std::function<void()> onChanged) : QFrame(owner, Qt::Popup), onChanged_(std::move(onChanged))
-	{
-		setObjectName(QStringLiteral("OBSViewerDialog"));
-		setAttribute(Qt::WA_DeleteOnClose);
-		setStyleSheet(theme::styleSheet() +
-			      QStringLiteral("QFrame#OBSViewerDialog { border: 1px solid #252C36; border-radius: 8px; }"));
-		setMinimumWidth(330);
-
-		auto *title = new QLabel(QStringLiteral("Sources through the bus"), this);
-		title->setProperty("heading", true);
-		auto *help = new QLabel(QStringLiteral("Ticked sources leave the output tracks and go through the bus "
-						       "instead. Unticking puts their tracks back as they were."),
-					this);
-		help->setWordWrap(true);
-		help->setProperty("dim", true);
-
-		list_ = new QListWidget(this);
-		list_->setMinimumHeight(140);
-		list_->setMaximumHeight(280);
-		auto *all = new QPushButton(QStringLiteral("All"), this);
-		auto *none = new QPushButton(QStringLiteral("None"), this);
-		auto *buttons = new QHBoxLayout();
-		buttons->addWidget(all);
-		buttons->addWidget(none);
-		buttons->addStretch(1);
-
-		sendTrack_ = new QComboBox(this);
-		for (int t = 1; t <= 6; ++t)
-			sendTrack_->addItem(QStringLiteral("Track %1").arg(t), t);
-		sendTrack_->setToolTip(QStringLiteral("A spare OBS track that carries the bus input. Don't use it for anything else."));
-		auto *sendRow = new QHBoxLayout();
-		sendRow->addWidget(new QLabel(QStringLiteral("Bus input on"), this));
-		sendRow->addStretch(1);
-		sendRow->addWidget(sendTrack_);
-
-		auto *outRow = new QHBoxLayout();
-		outRow->addWidget(new QLabel(QStringLiteral("Bus output to"), this));
-		outRow->addStretch(1);
-		for (int t = 1; t <= 6; ++t) {
-			auto *cb = new QCheckBox(QString::number(t), this);
-			cb->setToolTip(QStringLiteral("Send the processed bus to Track %1").arg(t));
-			outputs_.push_back(cb);
-			outRow->addWidget(cb);
-		}
-
-		auto *layout = new QVBoxLayout(this);
-		layout->setContentsMargins(14, 12, 14, 12);
-		layout->setSpacing(8);
-		layout->addWidget(title);
-		layout->addWidget(help);
-		layout->addWidget(list_);
-		layout->addLayout(buttons);
-		layout->addLayout(sendRow);
-		layout->addLayout(outRow);
-
-		connect(list_, &QListWidget::itemChanged, this, [this](QListWidgetItem *item) {
-			if (updating_)
-				return;
-			MasterBus::get().setRouted(item->data(Qt::UserRole).toString().toStdString(),
-						   item->checkState() == Qt::Checked);
-			changed();
-		});
-		connect(all, &QPushButton::clicked, this, [this] {
-			MasterBus::get().routeAll(true);
-			changed();
-		});
-		connect(none, &QPushButton::clicked, this, [this] {
-			MasterBus::get().routeAll(false);
-			changed();
-		});
-		connect(sendTrack_, &QComboBox::currentIndexChanged, this, [this](int index) {
-			if (updating_ || index < 0)
-				return;
-			MasterBus::get().setSendTrack(sendTrack_->itemData(index).toInt());
-			changed();
-		});
-		for (QCheckBox *cb : outputs_)
-			connect(cb, &QCheckBox::toggled, this, [this] {
-				if (updating_)
-					return;
-				uint32_t mask = 0;
-				for (size_t i = 0; i < outputs_.size(); ++i)
-					if (outputs_[i]->isChecked())
-						mask |= 1u << i;
-				MasterBus::get().setOutputMask(mask);
-				changed();
-			});
-		refresh();
-	}
-
-private:
-	void changed()
-	{
-		refresh();
-		if (onChanged_)
-			onChanged_();
-	}
-
-	void refresh()
-	{
-		updating_ = true;
-		const auto &cfg = MasterBus::get().config();
-		list_->clear();
-		for (const auto &row : MasterBus::get().audioSources()) {
-			QString tracks;
-			for (int t = 0; t < 6; ++t)
-				if (row.mixers & (1u << t))
-					tracks += QString::number(t + 1);
-			auto *item = new QListWidgetItem(
-				QStringLiteral("%1    · tracks %2")
-					.arg(QString::fromStdString(row.name), tracks.isEmpty() ? QStringLiteral("—") : tracks),
-				list_);
-			item->setData(Qt::UserRole, QString::fromStdString(row.uuid));
-			item->setFlags(item->flags() | Qt::ItemIsUserCheckable);
-			item->setCheckState(row.routed ? Qt::Checked : Qt::Unchecked);
-		}
-		if (list_->count() == 0)
-			list_->addItem(QStringLiteral("No audio sources in this scene collection"));
-		list_->setEnabled(MasterBus::get().enabled());
-		sendTrack_->setCurrentIndex(cfg.sendTrack - 1);
-		for (int t = 0; t < 6; ++t) {
-			QCheckBox *cb = outputs_[static_cast<size_t>(t)];
-			cb->setChecked(cfg.outputMask & (1u << t));
-			cb->setEnabled(t != cfg.sendTrack - 1);
-		}
-		updating_ = false;
-	}
-
-	std::function<void()> onChanged_;
-	QListWidget *list_ = nullptr;
-	QComboBox *sendTrack_ = nullptr;
-	std::vector<QCheckBox *> outputs_;
-	bool updating_ = false;
-};
-
-// ---------------------------------------------------------------------------
 
 namespace {
 
@@ -982,7 +844,7 @@ MasterBusPanel::MasterBusPanel(bool embedded, QWidget *parent) : QWidget(parent)
 	sl->addLayout(powerRow);
 
 	inputs_ = new StripButton(strip);
-	inputs_->setToolTip(QStringLiteral("Choose which sources go through the bus, and the bus tracks"));
+	inputs_->setToolTip(QStringLiteral("Routing: which sources go through the bus and where it goes, as a wire diagram"));
 	sl->addWidget(inputs_);
 
 	// Shown when the bus output isn't on the track the stream sends.
@@ -1288,7 +1150,7 @@ void MasterBusPanel::refreshStatus()
 		status_->setText(QStringLiteral("Running · %1").arg(plugins == 1 ? QStringLiteral("1 plugin")
 										  : QStringLiteral("%1 plugins").arg(plugins)));
 
-	inputs_->setTexts(QStringLiteral("Inputs"), routed == 1 ? QStringLiteral("1 source") : QStringLiteral("%1 sources").arg(routed));
+	inputs_->setTexts(QStringLiteral("Routing"), routed == 1 ? QStringLiteral("1 source") : QStringLiteral("%1 sources").arg(routed));
 
 	const auto &cfg = bus.config();
 	const bool missing = bus.running() && routed > 0 &&
@@ -1504,15 +1366,13 @@ void MasterBusPanel::showSlotMenu(int index, const QPoint &globalPos)
 
 void MasterBusPanel::showInputs()
 {
-	QPointer<MasterBusPanel> self(this);
-	auto *popup = new InputsPopup(this, [self] {
-		if (self)
-			self->refreshStatus();
-	});
-	popup->adjustSize();
-	QPoint pos = inputs_->mapToGlobal(QPoint(0, inputs_->height() + 4));
-	popup->move(pos);
-	popup->show();
+	// One routing window, shared by every bus view.
+	static QPointer<RoutingDialog> dialog;
+	if (!dialog)
+		dialog = new RoutingDialog(window());
+	dialog->show();
+	dialog->raise();
+	dialog->activateWindow();
 }
 
 void MasterBusPanel::startScan(bool rescanAll)

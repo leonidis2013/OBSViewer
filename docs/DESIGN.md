@@ -456,6 +456,18 @@ other sources  ─────────────────────�
   mask now re-applies routing (routed sources = original − outputs + send), so a
   newly added output track never carries a routed source dry as well.
 
+### 8.1b Routing window (0.9.0)
+
+The strip's **Routing** button opens `RoutingDialog` (one shared, non-modal window):
+`RoutingDiagram` paints sources (left), the bus box (input track, plugin chain with
+bypass state, outputs, ON/OFF), and Tracks 1–6 (right, tagged STREAM from
+`streamTrackIndex`, REC from the profile's `AdvOut/RecTracks` or Track 1 in Simple
+mode, BUS IN). Wires are cubic curves: blue = source → bus and bus → output tracks
+(dashed if the bus isn't running), grey = un-routed source → each of its tracks.
+Clicking a source toggles `setRouted`; clicking a track toggles it in the output mask.
+Below it: All / None, bus input track, output checkboxes. Refreshed every 0.5 s from a
+signature of the routing state. Replaces the 0.6 Inputs popup.
+
 ### 8.1a Listen to stream (0.8.2)
 
 `StreamMonitor`: raw audio callback on the stream track (final mix, bus included)
