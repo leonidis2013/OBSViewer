@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdint>
 #include <vector>
 
 // Meter math shared by the per-tile audio meters. Pure functions, unit-tested.
@@ -36,6 +37,16 @@ struct SourceReading {
 };
 
 constexpr double kLiveSec = 3.0; // no audio for this long = the source has none
+
+// Has a source sent audio recently? lastNs = its last audio (0 = never). The audio
+// thread can stamp `lastNs` just after the caller read `nowNs`; a time slightly in
+// the future is the freshest audio there is.
+inline bool isLive(uint64_t lastNs, uint64_t nowNs)
+{
+	if (lastNs == 0)
+		return false;
+	return lastNs >= nowNs || static_cast<double>(nowNs - lastNs) / 1e9 < kLiveSec;
+}
 
 // What a tile shows: the loudest unmuted source per channel.
 struct TileLevels {

@@ -651,6 +651,11 @@ static void testLevelMath()
 		CHECK(combine({c}).clipped);
 	}
 	{
+		// isLive: recent, never, stale, and stamped just after "now" (the flicker bug)
+		CHECK(levels::isLive(10'000'000'000ull, 10'500'000'000ull));
+		CHECK(!levels::isLive(0, 10'000'000'000ull));
+		CHECK(!levels::isLive(1'000'000'000ull, 10'000'000'000ull));
+		CHECK(levels::isLive(10'000'000'100ull, 10'000'000'000ull));
 		// a camera that says it has audio but sends none: greyed out
 		SourceReading cam;
 		cam.live = false;

@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.10.3] — 2026-10-25
+
+- **Fixed: view audio meters flickered** (since 0.10.1). When a source's audio arrived in the instant between the multiview reading the clock and reading the meter, that frame counted the source as having no audio and greyed the meter out. Fresh audio now always counts. The red clip light had the same race and is fixed too.
+
+
 ## [0.10.2] — 2026-10-25
 
 - **Steadier upload speed.** The stream goes out in bursts (a big one at every keyframe), so measuring once a second made the number jump around. The upload speed and its 5-minute graph now average over the last 10 seconds.

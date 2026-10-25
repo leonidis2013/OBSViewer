@@ -16,9 +16,9 @@ levels::SourceReading LevelEntry::read(uint64_t nowNs) const
 		r.rms[c] = levels::ballistic(rms[c].load(std::memory_order_relaxed), levels::kFloorDb, idle);
 	}
 	const uint64_t clip = clipNs.load(std::memory_order_relaxed);
-	r.clipped = clip && nowNs >= clip && static_cast<double>(nowNs - clip) / 1e9 < levels::kClipHoldSec;
+	r.clipped = clip && (clip >= nowNs || static_cast<double>(nowNs - clip) / 1e9 < levels::kClipHoldSec);
 	r.muted = muted.load(std::memory_order_relaxed);
-	r.live = last && nowNs >= last && static_cast<double>(nowNs - last) / 1e9 < levels::kLiveSec;
+	r.live = levels::isLive(last, nowNs);
 	return r;
 }
 
