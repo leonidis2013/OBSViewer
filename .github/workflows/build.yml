@@ -28,7 +28,7 @@ jobs:
       - name: Layout, version and updater logic tests (with sanitizers)
         run: |
           g++ -std=c++17 -O1 -g -fsanitize=address,undefined -Wall -Wextra -Werror -Isrc \
-            tests/UnitTests.cpp src/core/Version.cpp src/viewer/Layouts.cpp src/update/ReleaseInfo.cpp src/core/Health.cpp \
+            tests/UnitTests.cpp src/core/Version.cpp src/viewer/Layouts.cpp src/update/ReleaseInfo.cpp src/core/Health.cpp src/core/Countdown.cpp \
             -o unit_tests
           ./unit_tests
 

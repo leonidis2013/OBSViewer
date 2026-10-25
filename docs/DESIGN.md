@@ -279,9 +279,11 @@ only for a Problem.
   < 0.0008 as still. Health "Picture": black ≥ 3 s warning, ≥ 5 s while streaming or
   recording problem; unchanged ≥ 60 s while live warning (Settings can turn the
   frozen warning off).
-- **Clock:** side bar section with the time of day; optional daily countdown to a set
-  time with a label ("Service starts in 4:12", amber in the last 2 minutes, then
-  "+m:ss started" for an hour). Hidden more than 12 h before.
+- **Clock:** side bar section with the time of day; optional countdown to a set time
+  on chosen days (0.8.1) with a label ("Service starts in 4:12", amber in the last 2
+  minutes, then "+m:ss started" for an hour). More than 12 h before, it shows when
+  the next start is ("Service starts Sun 10:30 AM"). `nextCountdown()`
+  (core/Countdown) finds the target, across midnight too; unit-tested.
 - **Scene per view:** right-click a scene view ▸ This View Shows ▸ Automatic or any
   scene (per fixed layout, by scene name). Dynamic: right-click ▸ Hide “scene”;
   Hidden Scenes ▸ Show / Show All. Renderer, clicks and the "showing" marks all use
@@ -324,7 +326,8 @@ Stored as JSON in `~/Library/Application Support/obs-studio/plugin_config/obsvie
 | `show_transitions` | `true` | CUT / AUTO strip between Preview and Program, and in the controls dock. |
 | `warn_frozen` | `true` | Health warns when Program hasn't changed for 60 s while live. |
 | `show_clock` | `true` | Clock section in the side bar. |
-| `countdown_on` / `countdown_minutes` / `countdown_label` | off / 630 (10:30) / "Service starts" | Daily countdown. |
+| `countdown_on` / `countdown_minutes` / `countdown_label` | off / 630 (10:30) / "Service starts" | Countdown to a start time. |
+| `countdown_days` | `127` (every day) | Days the countdown applies: bit 0 = Monday … bit 6 = Sunday. Other days show when the next start is. |
 | `view_scenes` | — | Per fixed layout: scene name for each view ("" = automatic). |
 | `dynamic_hidden` | — | Scenes left out of the Dynamic layout. |
 | `loudness_preset` | `0` (YouTube −14) | Loudness target preset. |

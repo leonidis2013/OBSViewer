@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.8.1] — 2026-10-24
+
+- **Countdown days:** Settings ▸ Clock now has a checkbox for each day (Sun–Sat). The countdown runs only on the days you tick; on other days the clock shows when the next one is ("Service starts Sun 10:30 AM"). Existing setups keep every day ticked. It also works across midnight.
+
+
 ## [0.8.0] — 2026-10-24
 
 - **Transition controls moved between Preview and Program.** A slim column between the two big views has **CUT** and **AUTO**, a progress bar, and the transition's name and length underneath. AUTO lights red while a transition runs. It's in the Dynamic, ATEM and Classic layouts (Big Program and the scene grids have no room for it), and it's dimmed outside Studio Mode. The side bar's Transition section is gone.

@@ -2,6 +2,8 @@
 
 #include <QDialog>
 
+#include <vector>
+
 class QCheckBox;
 class QDoubleSpinBox;
 class QComboBox;
@@ -36,6 +38,7 @@ private:
 	QCheckBox *countdownOn_ = nullptr;
 	QTimeEdit *countdownTime_ = nullptr;
 	QLineEdit *countdownLabel_ = nullptr;
+	std::vector<QCheckBox *> countdownDays_;
 	QCheckBox *tileMeters_ = nullptr;
 
 	QComboBox *loudnessPreset_ = nullptr;

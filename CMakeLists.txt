@@ -130,6 +130,7 @@ target_sources(
     src/audio/meters/LoudnessPresets.h
     src/audio/meters/TpFilter.h
     src/audio/meters/TruePeakMeter.h
+    src/core/Countdown.cpp
     src/core/Health.cpp
     src/core/Health.hpp
     src/core/History.hpp

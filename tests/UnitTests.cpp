@@ -5,6 +5,7 @@
 
 #include "audio/meters/LoudnessMeter.h"
 #include "audio/meters/TruePeakMeter.h"
+#include "core/Countdown.hpp"
 #include "core/Health.hpp"
 #include "core/History.hpp"
 #include "core/LevelMath.hpp"
@@ -228,6 +229,38 @@ static void testTransitionStrip()
 	const auto plain = placeTiles("atem", p);
 	CHECK(std::fabs(plain[1].cell.x - (plain[0].cell.x + plain[0].cell.w) - p.gap) < 0.01f);
 	CHECK(!transitionStrip(plain, p.gap).valid);
+}
+
+static void testCountdown()
+{
+	const int sun = dayBit(7), mon = dayBit(1);
+	const int t1030 = 10 * 60 + 30; // 10:30
+	// Sunday 9:00 → today, 1.5 h ahead
+	auto c = nextCountdown(7, 9 * 3600, t1030, sun);
+	CHECK(c.found && c.dayOffset == 0 && c.secondsTo == 5400);
+	// Sunday 10:50 → started 20 min ago, still counts
+	c = nextCountdown(7, 10 * 3600 + 50 * 60, t1030, sun);
+	CHECK(c.found && c.dayOffset == 0 && c.secondsTo == -1200);
+	// Sunday 12:00 → past the hour of grace: next Sunday
+	c = nextCountdown(7, 12 * 3600, t1030, sun);
+	CHECK(c.found && c.dayOffset == 7);
+	// Wednesday → next Sunday is 4 days away
+	c = nextCountdown(3, 8 * 3600, t1030, sun);
+	CHECK(c.found && c.dayOffset == 4);
+	// Saturday 23:50, start Sunday 0:10 → tomorrow, 20 min
+	c = nextCountdown(6, 23 * 3600 + 50 * 60, 10, sun);
+	CHECK(c.found && c.dayOffset == 1 && c.secondsTo == 1200);
+	// Monday 0:20, started Sunday 23:50 → yesterday, 30 min ago
+	c = nextCountdown(1, 20 * 60, 23 * 60 + 50, sun);
+	CHECK(c.found && c.dayOffset == -1 && c.secondsTo == -1800);
+	// Sunday and Monday selected, Sunday afternoon → Monday
+	c = nextCountdown(7, 15 * 3600, t1030, sun | mon);
+	CHECK(c.found && c.dayOffset == 1);
+	// every day = the old behaviour
+	c = nextCountdown(4, 9 * 3600, t1030, kAllDays);
+	CHECK(c.found && c.dayOffset == 0);
+	// no days
+	CHECK(!nextCountdown(7, 9 * 3600, t1030, 0).found);
 }
 
 static void testPictureHealth()
@@ -570,6 +603,7 @@ int main()
 	testLayouts();
 	testAutoLayout();
 	testTransitionStrip();
+	testCountdown();
 	testPictureHealth();
 	testVersions();
 	testSelection();

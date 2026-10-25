@@ -42,7 +42,7 @@ To uninstall, quit OBS and delete
 - **Scene per view:** right-click a scene view ▸ This View Shows to pick its scene; in
   Dynamic, right-click ▸ Hide a scene.
 - **Hotkeys:** OBS ▸ Settings ▸ Hotkeys ▸ "OBSViewer: …" (also from a Stream Deck).
-- **Clock:** Settings ▸ Clock sets a daily countdown (e.g. "Service starts").
+- **Clock:** Settings ▸ Clock sets a countdown (e.g. "Service starts") on the days you tick.
 - **Side bar:** health and performance lights (click for details), Start stream with
   upload, bitrate history, dropped frames and connection, Start recording with disk
   space, and the programme loudness meter with its 5-minute history.

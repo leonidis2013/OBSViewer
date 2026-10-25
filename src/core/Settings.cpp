@@ -66,6 +66,8 @@ void Settings::load()
 	if (obs_data_has_user_value(data, "countdown_minutes"))
 		countdownMinutes = std::clamp(static_cast<int>(obs_data_get_int(data, "countdown_minutes")), 0, 24 * 60 - 1);
 	countdownLabel = getString(data, "countdown_label", defaults.countdownLabel);
+	if (obs_data_has_user_value(data, "countdown_days"))
+		countdownDays = static_cast<int>(obs_data_get_int(data, "countdown_days")) & 0x7F;
 
 	viewScenes.clear();
 	if (obs_data_t *vs = obs_data_get_obj(data, "view_scenes")) {
@@ -157,6 +159,7 @@ void Settings::save() const
 	obs_data_set_bool(data, "countdown_on", countdownOn);
 	obs_data_set_int(data, "countdown_minutes", countdownMinutes);
 	obs_data_set_string(data, "countdown_label", countdownLabel.c_str());
+	obs_data_set_int(data, "countdown_days", countdownDays);
 
 	auto toArray = [](const std::vector<std::string> &names) {
 		obs_data_array_t *arr = obs_data_array_create();

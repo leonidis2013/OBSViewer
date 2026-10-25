@@ -29,6 +29,7 @@ struct Settings {
 	bool showClock = true;
 	bool countdownOn = false;
 	int countdownMinutes = 10 * 60 + 30; // time of day to count down to, minutes after midnight
+	int countdownDays = 0x7F;            // days it applies: bit 0 = Monday … bit 6 = Sunday
 	std::string countdownLabel = "Service starts";
 
 	// Which scene each view shows. Fixed layouts: layout id → scene name per view

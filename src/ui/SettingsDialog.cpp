@@ -2,6 +2,7 @@
 
 #include "App.hpp"
 #include "audio/meters/LoudnessPresets.h"
+#include "core/Countdown.hpp"
 #include "core/Settings.hpp"
 #include "ui/Theme.hpp"
 #include "update/Keychain.hpp"
@@ -19,6 +20,7 @@
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QLineEdit>
+#include <QLocale>
 #include <QPushButton>
 #include <QScrollArea>
 #include <QTimeEdit>
@@ -98,7 +100,7 @@ SettingsDialog::SettingsDialog(QWidget *parent) : QDialog(parent)
 	auto *clockGroup = new QGroupBox(tr("Clock"), this);
 	auto *clockForm = new QFormLayout(clockGroup);
 	showClock_ = new QCheckBox(tr("Show the clock in the side bar"), clockGroup);
-	countdownOn_ = new QCheckBox(tr("Count down to a time each day"), clockGroup);
+	countdownOn_ = new QCheckBox(tr("Count down to a start time"), clockGroup);
 	countdownTime_ = new QTimeEdit(clockGroup);
 	countdownTime_->setDisplayFormat(QStringLiteral("h:mm AP"));
 	countdownLabel_ = new QLineEdit(clockGroup);
@@ -106,10 +108,25 @@ SettingsDialog::SettingsDialog(QWidget *parent) : QDialog(parent)
 	clockForm->addRow(QString(), showClock_);
 	clockForm->addRow(QString(), countdownOn_);
 	clockForm->addRow(tr("Count down to"), countdownTime_);
+	// Days it applies, Sunday first.
+	auto *daysRow = new QWidget(clockGroup);
+	auto *daysLayout = new QHBoxLayout(daysRow);
+	daysLayout->setContentsMargins(0, 0, 0, 0);
+	daysLayout->setSpacing(10);
+	for (int day : {7, 1, 2, 3, 4, 5, 6}) {
+		auto *box = new QCheckBox(QLocale().dayName(day, QLocale::ShortFormat), daysRow);
+		box->setProperty("day", day);
+		daysLayout->addWidget(box);
+		countdownDays_.push_back(box);
+	}
+	daysLayout->addStretch(1);
+	clockForm->addRow(tr("On"), daysRow);
 	clockForm->addRow(tr("Label"), countdownLabel_);
 	connect(countdownOn_, &QCheckBox::toggled, this, [this](bool on) {
 		countdownTime_->setEnabled(on);
 		countdownLabel_->setEnabled(on);
+		for (QCheckBox *box : countdownDays_)
+			box->setEnabled(on);
 	});
 	auto describe = [this](QComboBox *box) {
 		layoutHelp_->setText(QString::fromStdString(layoutById(box->currentData().toString().toStdString()).description));
@@ -245,6 +262,10 @@ void SettingsDialog::load()
 	countdownLabel_->setText(QString::fromStdString(s.countdownLabel));
 	countdownTime_->setEnabled(s.countdownOn);
 	countdownLabel_->setEnabled(s.countdownOn);
+	for (QCheckBox *box : countdownDays_) {
+		box->setChecked(s.countdownDays & dayBit(box->property("day").toInt()));
+		box->setEnabled(s.countdownOn);
+	}
 	tileMeters_->setChecked(s.tileMeters);
 	loudnessPreset_->setCurrentIndex(std::clamp(s.loudnessPreset, 0, bm::kNumLoudnessPresets - 1));
 	customTarget_->setValue(s.customTargetLufs);
@@ -281,6 +302,10 @@ void SettingsDialog::apply()
 	s.showClock = showClock_->isChecked();
 	s.countdownOn = countdownOn_->isChecked();
 	s.countdownMinutes = countdownTime_->time().hour() * 60 + countdownTime_->time().minute();
+	s.countdownDays = 0;
+	for (QCheckBox *box : countdownDays_)
+		if (box->isChecked())
+			s.countdownDays |= dayBit(box->property("day").toInt());
 	s.countdownLabel = countdownLabel_->text().trimmed().isEmpty() ? std::string("Service starts")
 								     : countdownLabel_->text().trimmed().toStdString();
 	s.tileMeters = tileMeters_->isChecked();

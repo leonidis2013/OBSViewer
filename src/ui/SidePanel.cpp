@@ -1,5 +1,6 @@
 #include "ui/SidePanel.hpp"
 
+#include "core/Countdown.hpp"
 #include "core/Settings.hpp"
 #include "metrics/Metrics.hpp"
 #include "ui/Paint.hpp"
@@ -15,6 +16,8 @@
 #include <QPaintEvent>
 #include <QStackedWidget>
 #include <QTime>
+#include <QDate>
+#include <QLocale>
 #include <QTimer>
 #include <QVBoxLayout>
 
@@ -771,8 +774,14 @@ public:
 	void setScale(qreal scale)
 	{
 		scale_ = scale;
-		setFixedHeight(static_cast<int>(std::lround((Settings::get().countdownOn ? 52 : 30) * scale)));
+		setFixedHeight(static_cast<int>(std::lround((countdownShown() ? 52 : 30) * scale)));
 		update();
+	}
+
+	static bool countdownShown()
+	{
+		const Settings &st = Settings::get();
+		return st.countdownOn && (st.countdownDays & kAllDays) != 0;
 	}
 
 protected:
@@ -786,19 +795,29 @@ protected:
 		const QTime now = QTime::currentTime();
 		paint::text(p, QRectF(r.left(), r.top(), r.width(), 28 * s), now.toString(QStringLiteral("h:mm:ss AP")),
 			    col(theme::kText), paint::mono(21 * s, true));
-		if (!st.countdownOn)
+		if (!countdownShown())
 			return;
 
-		// Seconds until today's target; past it by up to an hour counts up.
-		const int nowSec = now.msecsSinceStartOfDay() / 1000;
-		int diff = st.countdownMinutes * 60 - nowSec;
+		// The next start on a selected day; past it by up to an hour counts up.
+		const QDate today = QDate::currentDate();
+		const CountdownTarget target = nextCountdown(today.dayOfWeek(), now.msecsSinceStartOfDay() / 1000,
+							     st.countdownMinutes, st.countdownDays);
 		const QRectF line(r.left(), r.top() + 30 * s, r.width(), 18 * s);
 		const QString label = QString::fromStdString(st.countdownLabel);
-		if (diff > 12 * 3600 || diff < -3600) {
-			paint::text(p, line, QStringLiteral("%1 at %2").arg(label, QTime(0, 0).addSecs(st.countdownMinutes * 60).toString(QStringLiteral("h:mm AP"))),
-				    col(theme::kTextFaint), paint::font(11 * s));
+		if (!target.found)
+			return;
+		long diffL = target.secondsTo;
+		if (diffL > 12 * 3600) {
+			// Not today (or not soon): when the next one is.
+			const QString time = QTime(0, 0).addSecs(st.countdownMinutes * 60).toString(QStringLiteral("h:mm AP"));
+			const QString when = target.dayOffset == 0   ? QStringLiteral("at %1").arg(time)
+					     : target.dayOffset == 1 ? QStringLiteral("tomorrow %1").arg(time)
+								     : QStringLiteral("%1 %2").arg(QLocale().dayName(
+										today.addDays(target.dayOffset).dayOfWeek(), QLocale::ShortFormat), time);
+			paint::text(p, line, QStringLiteral("%1 %2").arg(label, when), col(theme::kTextFaint), paint::font(11 * s));
 			return;
 		}
+		int diff = static_cast<int>(diffL);
 		const bool past = diff < 0;
 		diff = std::abs(diff);
 		const QString clock = diff >= 3600 ? QStringLiteral("%1:%2:%3")
