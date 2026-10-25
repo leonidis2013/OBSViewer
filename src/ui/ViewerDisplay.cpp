@@ -2,11 +2,13 @@
 
 #include "core/Settings.hpp"
 #include "ui/Theme.hpp"
+#include "ui/TransitionControls.hpp"
 #include "viewer/Layouts.hpp"
 #include "viewer/Renderer.hpp"
 #include "viewer/ViewerState.hpp"
 
 #include <obs.h>
+#include <obs-frontend-api.h>
 
 #include <QContextMenuEvent>
 #include <QMouseEvent>
@@ -27,7 +29,7 @@ ViewerDisplay::ViewerDisplay(QWidget *parent) : QWidget(parent), layout_(&layout
 	setAttribute(Qt::WA_NativeWindow);
 	setMinimumSize(160, 90);
 	setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
-	setMouseTracking(false);
+	setMouseTracking(true); // hover on the transition buttons
 
 	winId(); // force creation of the native view
 
@@ -113,7 +115,8 @@ void ViewerDisplay::destroyDisplay()
 void ViewerDisplay::draw(void *param, uint32_t cx, uint32_t cy)
 {
 	auto *self = static_cast<ViewerDisplay *>(param);
-	Renderer::render(self->layout_.load()->id, cx, cy, self->dpr_.load(), self->cache_);
+	Renderer::render(self->layout_.load()->id, cx, cy, self->dpr_.load(), self->cache_, self->hover_.load(),
+			 self->pressed_.load());
 }
 
 void ViewerDisplay::paintEvent(QPaintEvent *event)
@@ -156,20 +159,79 @@ void ViewerDisplay::hideEvent(QHideEvent *event)
 	}
 }
 
+namespace {
+
+// Same placement the renderer uses, in the same logical pixels.
+std::vector<PlacedTile> placeFor(const QWidget *w, const std::string &id, const std::vector<int> &map)
+{
+	const ViewerState &state = ViewerState::get();
+	const Settings &settings = Settings::get();
+	PlaceParams params;
+	params.width = static_cast<float>(w->width());
+	params.height = static_cast<float>(w->height());
+	params.aspect = static_cast<float>(state.canvasWidth()) / static_cast<float>(std::max<uint32_t>(1, state.canvasHeight()));
+	params.labelHeight = settings.showLabels ? labelBandHeight(params.height) : 0.0f;
+	params.gap = 4.0f;
+	params.centerStrip = settings.showTransitions ? transitionStripWidth(id, params.width) : 0.0f;
+	params.sceneCount = id == kAutoLayoutId ? static_cast<int>(map.size()) : state.sceneCount();
+	return placeTiles(id, params);
+}
+
+} // namespace
+
+int ViewerDisplay::stripButtonAt(const QPointF &pos) const
+{
+	if (!Settings::get().showTransitions)
+		return Renderer::kNone;
+	const std::string id = layout_.load()->id;
+	if (transitionStripWidth(id, static_cast<float>(width())) <= 0.0f)
+		return Renderer::kNone;
+	const TransitionStrip st = transitionStrip(placeFor(this, id, ViewerState::get().viewMap(id)), 4.0f);
+	if (!st.valid)
+		return Renderer::kNone;
+	const float x = static_cast<float>(pos.x()), y = static_cast<float>(pos.y());
+	if (st.cut.contains(x, y))
+		return Renderer::kCut;
+	if (st.autoTake.contains(x, y))
+		return Renderer::kAuto;
+	return Renderer::kNone;
+}
+
+void ViewerDisplay::setHover(int button)
+{
+	if (hover_.exchange(button) == button)
+		return;
+	const bool clickable = button != Renderer::kNone && obs_frontend_preview_program_mode_active();
+	if (clickable)
+		setCursor(Qt::PointingHandCursor);
+	else
+		unsetCursor();
+}
+
+void ViewerDisplay::mouseMoveEvent(QMouseEvent *event)
+{
+	setHover(stripButtonAt(event->position()));
+	QWidget::mouseMoveEvent(event);
+}
+
+void ViewerDisplay::mouseReleaseEvent(QMouseEvent *event)
+{
+	pressed_.store(Renderer::kNone);
+	QWidget::mouseReleaseEvent(event);
+}
+
+void ViewerDisplay::leaveEvent(QEvent *event)
+{
+	setHover(Renderer::kNone);
+	pressed_.store(Renderer::kNone);
+	QWidget::leaveEvent(event);
+}
+
 bool ViewerDisplay::tileAt(const QPointF &pos, int &kind, int &sceneIndex, int &slot) const
 {
-	// Same placement the renderer uses, in the same logical pixels.
-	const ViewerState &state = ViewerState::get();
-	PlaceParams params;
-	params.width = static_cast<float>(width());
-	params.height = static_cast<float>(height());
-	params.aspect = static_cast<float>(state.canvasWidth()) / static_cast<float>(std::max<uint32_t>(1, state.canvasHeight()));
-	params.labelHeight = Settings::get().showLabels ? labelBandHeight(params.height) : 0.0f;
-	params.gap = 4.0f;
 	const std::string id = layout_.load()->id;
-	const std::vector<int> map = state.viewMap(id);
-	params.sceneCount = id == kAutoLayoutId ? static_cast<int>(map.size()) : state.sceneCount();
-	const std::vector<PlacedTile> tiles = placeTiles(id, params);
+	const std::vector<int> map = ViewerState::get().viewMap(id);
+	const std::vector<PlacedTile> tiles = placeFor(this, id, map);
 	const int hit = obsviewer::tileAt(tiles, static_cast<float>(pos.x()), static_cast<float>(pos.y()));
 	if (hit < 0)
 		return false;
@@ -184,6 +246,21 @@ bool ViewerDisplay::tileAt(const QPointF &pos, int &kind, int &sceneIndex, int &
 
 void ViewerDisplay::mousePressEvent(QMouseEvent *event)
 {
+	if (event->button() == Qt::LeftButton) {
+		const int button = stripButtonAt(event->position());
+		if (button != Renderer::kNone) {
+			// Only in Studio Mode: outside it there is nothing to take.
+			if (obs_frontend_preview_program_mode_active()) {
+				pressed_.store(button);
+				if (button == Renderer::kCut)
+					TransitionControls::cut();
+				else
+					TransitionControls::autoTransition();
+			}
+			event->accept();
+			return;
+		}
+	}
 	int kind = 0, scene = -1, slot = -1;
 	if (event->button() == Qt::LeftButton && tileAt(event->position(), kind, scene, slot) &&
 	    (kind != static_cast<int>(TileKind::Scene) || scene >= 0))
@@ -193,6 +270,11 @@ void ViewerDisplay::mousePressEvent(QMouseEvent *event)
 
 void ViewerDisplay::mouseDoubleClickEvent(QMouseEvent *event)
 {
+	// A quick second click on CUT / AUTO is ignored (no accidental double take).
+	if (stripButtonAt(event->position()) != Renderer::kNone) {
+		event->accept();
+		return;
+	}
 	int kind = 0, scene = -1, slot = -1;
 	if (event->button() == Qt::LeftButton && tileAt(event->position(), kind, scene, slot))
 		emit tileDoubleClicked(kind, scene);

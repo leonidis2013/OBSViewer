@@ -42,7 +42,9 @@ ViewerDock::ViewerDock(QWidget *parent) : QWidget(parent)
 	layout->setSpacing(0);
 	layout->addWidget(panel_, 1);
 
-	setMinimumSize(420, 260);
+	// Small minimum so the dock fits any OBS dock area (Qt refuses to dock a
+	// widget whose minimum is bigger than the space there).
+	setMinimumSize(240, 150);
 	setLayoutId(Settings::get().dockLayout);
 }
 

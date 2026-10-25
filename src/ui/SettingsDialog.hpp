@@ -29,6 +29,7 @@ private:
 	QCheckBox *alarms_ = nullptr;
 	QCheckBox *busEmbedded_ = nullptr;
 	QCheckBox *safeAreas_ = nullptr;
+	QCheckBox *showTransitions_ = nullptr;
 	QCheckBox *hideObsPreview_ = nullptr;
 	QCheckBox *warnFrozen_ = nullptr;
 	QCheckBox *showClock_ = nullptr;

@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.8.0] — 2026-10-24
+
+- **Transition controls moved between Preview and Program.** A slim column between the two big views has **CUT** and **AUTO**, a progress bar, and the transition's name and length underneath. AUTO lights red while a transition runs. It's in the Dynamic, ATEM and Classic layouts (Big Program and the scene grids have no room for it), and it's dimmed outside Studio Mode. The side bar's Transition section is gone.
+- **New setting:** Settings ▸ Multiview ▸ *Show the transition controls* hides the column (and the controls in the OBSViewer Controls dock).
+- **Fixed: the docks wouldn't dock into some areas.** The OBSViewer Controls dock was taller than OBS's bottom dock row, and Qt refuses to dock a panel bigger than the space. Its contents now scroll, so it fits anywhere; the multiview dock's minimum is smaller too.
+- **Open Bus in the controls dock** always opens the master bus in its own window.
+
+
 ## [0.7.4] — 2026-10-18
 
 - **Transition controls:** a Transition section at the top of the viewer's side bar, and in the OBSViewer Controls dock. **CUT** takes Preview to Program instantly; **AUTO** uses the chosen transition (its name is on the button). Pick the transition and its duration right there (the same list as OBS's). Outside Studio Mode it offers **Turn On Studio Mode**. In the small dock side bar only the two buttons show.

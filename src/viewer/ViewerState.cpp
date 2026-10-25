@@ -7,6 +7,7 @@
 #include <obs-frontend-api.h>
 
 #include <algorithm>
+#include <cstdio>
 #include <utility>
 
 namespace obsviewer {
@@ -237,6 +238,28 @@ void ViewerState::setSafeAreas(bool on)
 	safeAreas_ = on;
 }
 
+void ViewerState::setShowTransitions(bool on)
+{
+	std::lock_guard<std::mutex> lock(mutex_);
+	showTransitions_ = on;
+}
+
+namespace {
+
+// "300 ms", "1.5 s"; empty for transitions with their own fixed length.
+std::string durationText(obs_source_t *transition, int ms)
+{
+	if (!transition || obs_transition_fixed(transition))
+		return std::string();
+	if (ms < 1000)
+		return std::to_string(ms) + " ms";
+	char buf[32];
+	snprintf(buf, sizeof(buf), "%.1f s", static_cast<double>(ms) / 1000.0);
+	return buf;
+}
+
+} // namespace
+
 void ViewerState::refresh()
 {
 	// 1. Read the frontend (no lock held).
@@ -259,6 +282,10 @@ void ViewerState::refresh()
 	obs_source_t *preview = studio ? obs_frontend_get_current_preview_scene() : obs_source_get_ref(program);
 	const std::string programName = sourceName(program);
 	const std::string previewName = sourceName(preview);
+	obs_source_t *transition = obs_frontend_get_current_transition();
+	const std::string transitionName = sourceName(transition);
+	const std::string transitionTime = durationText(transition, obs_frontend_get_transition_duration());
+	const std::string transitionText = transitionName + "\n" + transitionTime;
 
 	const bool streaming = obs_frontend_streaming_active();
 	const bool recording = obs_frontend_recording_active();
@@ -285,6 +312,7 @@ void ViewerState::refresh()
 	Labels newLabels;
 	const bool rebuildNamed = namesChanged || heightChanged;
 	const bool rebuildStatic = heightChanged;
+	const bool rebuildTransition = heightChanged || transitionText != transitionText_;
 	if (rebuildNamed) {
 		// Fixed titles plus the scene names on their own, so the titles never move.
 		newLabels.program = createLabel("PROGRAM", height, kTileLabelScale);
@@ -297,6 +325,14 @@ void ViewerState::refresh()
 	if (rebuildStatic) {
 		newLabels.rec = createLabel("REC", height, kStatusLabelScale);
 		newLabels.studioOff = createLabel("STUDIO MODE OFF", height, kTileLabelScale * 0.8f);
+		newLabels.cut = createLabel("CUT", height, kTileLabelScale);
+		newLabels.autoTake = createLabel("AUTO", height, kTileLabelScale);
+	}
+	if (rebuildTransition) {
+		newLabels.transitionName =
+			createLabel(transitionName.empty() ? std::string("—") : transitionName, height, kTileLabelScale);
+		newLabels.transitionTime = createLabel(transitionTime.empty() ? std::string("—") : transitionTime,
+						       height, kTileLabelScale);
 	}
 
 	// Per-scene audio for the tile meters (volume meters are created / destroyed
@@ -336,6 +372,7 @@ void ViewerState::refresh()
 
 	obs_weak_source_t *newProgram = program ? obs_source_get_weak_source(program) : nullptr;
 	obs_weak_source_t *newPreview = preview ? obs_source_get_weak_source(preview) : nullptr;
+	obs_weak_source_t *newTransition = transition ? obs_source_get_weak_source(transition) : nullptr;
 
 	// 4. Swap under the lock; collect what to release afterwards.
 	std::vector<obs_source_t *> oldSources;
@@ -359,6 +396,7 @@ void ViewerState::refresh()
 		oldWeak.push_back(preview_);
 		program_ = newProgram;
 		preview_ = newPreview;
+		oldWeak.push_back(std::exchange(transition_, newTransition));
 
 		if (listChanged || heightChanged) {
 			for (auto &rs : renderScenes_) {
@@ -377,6 +415,12 @@ void ViewerState::refresh()
 			oldSources.push_back(std::exchange(labels_.rec, newLabels.rec));
 			oldSources.push_back(std::exchange(labels_.studioOff, newLabels.studioOff));
 			oldSources.push_back(std::exchange(labels_.muted, newLabels.muted));
+			oldSources.push_back(std::exchange(labels_.cut, newLabels.cut));
+			oldSources.push_back(std::exchange(labels_.autoTake, newLabels.autoTake));
+		}
+		if (rebuildTransition) {
+			oldSources.push_back(std::exchange(labels_.transitionName, newLabels.transitionName));
+			oldSources.push_back(std::exchange(labels_.transitionTime, newLabels.transitionTime));
 		}
 	}
 
@@ -389,6 +433,7 @@ void ViewerState::refresh()
 	}
 	programName_ = programName;
 	previewName_ = previewName;
+	transitionText_ = transitionText;
 	haveProgramNames_ = true;
 	labelHeight_ = height;
 	baseWidthMain_ = width;
@@ -404,6 +449,7 @@ void ViewerState::refresh()
 
 	obs_source_release(program);
 	obs_source_release(preview);
+	obs_source_release(transition);
 	obs_frontend_source_list_free(&list);
 }
 
@@ -504,8 +550,10 @@ void ViewerState::clear()
 		renderScenes_.clear();
 		oldWeak.push_back(std::exchange(program_, nullptr));
 		oldWeak.push_back(std::exchange(preview_, nullptr));
+		oldWeak.push_back(std::exchange(transition_, nullptr));
 		for (obs_source_t **l : {&labels_.program, &labels_.preview, &labels_.previewName, &labels_.rec,
-					 &labels_.programName, &labels_.studioOff, &labels_.muted})
+					 &labels_.programName, &labels_.studioOff, &labels_.muted, &labels_.cut,
+					 &labels_.autoTake, &labels_.transitionName, &labels_.transitionTime})
 			oldSources.push_back(std::exchange(*l, nullptr));
 		sceneAudio_.clear();
 		previewAudio_.clear();
@@ -518,6 +566,7 @@ void ViewerState::clear()
 	sceneNames_.clear();
 	programName_.clear();
 	previewName_.clear();
+	transitionText_.clear();
 	haveProgramNames_ = false;
 	labelHeight_ = 0;
 	// views_ is kept, so scenes are marked showing again when the next collection loads.
@@ -543,6 +592,12 @@ ViewerState::Snapshot ViewerState::acquire()
 	snap.programNameLabel = obs_source_get_ref(labels_.programName);
 	snap.studioOffLabel = obs_source_get_ref(labels_.studioOff);
 	snap.mutedLabel = obs_source_get_ref(labels_.muted);
+	snap.transition = obs_weak_source_get_source(transition_);
+	snap.cutLabel = obs_source_get_ref(labels_.cut);
+	snap.autoLabel = obs_source_get_ref(labels_.autoTake);
+	snap.transitionNameLabel = obs_source_get_ref(labels_.transitionName);
+	snap.transitionTimeLabel = obs_source_get_ref(labels_.transitionTime);
+	snap.showTransitions = showTransitions_;
 	snap.showTileMeters = showTileMeters_;
 	if (showTileMeters_) {
 		snap.sceneAudio = sceneAudio_;
@@ -569,7 +624,8 @@ void ViewerState::release(Snapshot &snap)
 	for (obs_source_t *s : snap.sceneLabels)
 		obs_source_release(s);
 	for (obs_source_t *s : {snap.programLabel, snap.previewLabel, snap.previewNameLabel, snap.recLabel,
-				snap.programNameLabel, snap.studioOffLabel, snap.mutedLabel})
+				snap.programNameLabel, snap.studioOffLabel, snap.mutedLabel, snap.transition, snap.cutLabel,
+				snap.autoLabel, snap.transitionNameLabel, snap.transitionTimeLabel})
 		obs_source_release(s);
 	snap = Snapshot{};
 }

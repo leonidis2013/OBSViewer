@@ -37,6 +37,21 @@ struct PlaceParams {
 	float labelHeight = 0;  // band under each picture; 0 = no labels
 	float gap = 4;          // space between tiles
 	int sceneCount = 0;     // scenes in the current collection
+	// Space between Preview and Program when they sit side by side, for the
+	// transition strip (0 = the normal gap).
+	float centerStrip = 0;
+};
+
+// Transition strip between Preview and Program: CUT and AUTO on top, a
+// progress bar, and the transition's name and length at the bottom.
+struct TransitionStrip {
+	bool valid = false;
+	Box area;       // the whole column
+	Box cut;
+	Box autoTake;
+	Box progress;   // h may be 0 when there is no room
+	Box nameLine;   // transition name
+	Box timeLine;   // duration
 };
 
 const std::vector<LayoutInfo> &allLayouts();
@@ -54,6 +69,14 @@ int tileAt(const std::vector<PlacedTile> &tiles, float x, float y);
 
 // Label band height for a view this tall (same units as PlaceParams).
 float labelBandHeight(float viewHeight);
+
+// Width to reserve (PlaceParams::centerStrip) for the transition strip in a
+// view this wide, or 0 for layouts without Preview and Program side by side.
+float transitionStripWidth(const std::string &layoutId, float viewWidth);
+
+// Where the strip and its buttons go, from placed tiles. valid = false when the
+// layout has no Preview / Program pair side by side, or the space is too small.
+TransitionStrip transitionStrip(const std::vector<PlacedTile> &tiles, float gap);
 
 constexpr const char *kAutoLayoutId = "auto";
 constexpr const char *kDefaultLayoutId = "auto";

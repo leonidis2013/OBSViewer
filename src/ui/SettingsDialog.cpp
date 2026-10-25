@@ -79,6 +79,9 @@ SettingsDialog::SettingsDialog(QWidget *parent) : QDialog(parent)
 	viewForm->addRow(QString(), tileMeters_);
 	viewForm->addRow(QString(), showSidebar_);
 	viewForm->addRow(QString(), alarms_);
+	showTransitions_ = new QCheckBox(tr("Show the transition controls (CUT / AUTO between Preview and Program)"), viewGroup);
+	showTransitions_->setToolTip(tr("Also shows or hides them in the OBSViewer Controls dock. They work in Studio Mode."));
+	viewForm->addRow(QString(), showTransitions_);
 	busEmbedded_ = new QCheckBox(tr("Open the master bus next to the side bar (instead of its own window)"), viewGroup);
 	viewForm->addRow(QString(), busEmbedded_);
 	safeAreas_ = new QCheckBox(tr("Show safe-area guides on Program and Preview"), viewGroup);
@@ -233,6 +236,7 @@ void SettingsDialog::load()
 	alarms_->setChecked(s.alarms);
 	busEmbedded_->setChecked(s.masterBusEmbedded);
 	safeAreas_->setChecked(s.safeAreas);
+	showTransitions_->setChecked(s.showTransitions);
 	hideObsPreview_->setChecked(s.hideObsPreview);
 	warnFrozen_->setChecked(s.warnFrozen);
 	showClock_->setChecked(s.showClock);
@@ -271,6 +275,7 @@ void SettingsDialog::apply()
 	s.alarms = alarms_->isChecked();
 	s.masterBusEmbedded = busEmbedded_->isChecked();
 	s.safeAreas = safeAreas_->isChecked();
+	s.showTransitions = showTransitions_->isChecked();
 	s.hideObsPreview = hideObsPreview_->isChecked();
 	s.warnFrozen = warnFrozen_->isChecked();
 	s.showClock = showClock_->isChecked();

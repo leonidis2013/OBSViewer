@@ -3,7 +3,6 @@
 #include "core/Settings.hpp"
 #include "metrics/Metrics.hpp"
 #include "ui/Paint.hpp"
-#include "ui/TransitionControls.hpp"
 
 #include <obs-frontend-api.h>
 #include <plugin-support.h>
@@ -937,10 +936,6 @@ SidePanel::SidePanel(QWidget *parent) : QWidget(parent)
 	cl->setContentsMargins(0, 0, 0, 0);
 	cl->setSpacing(6);
 
-	transitionSection_ = new Section(QStringLiteral("Transition"), theme::kAccentGreen, controls);
-	transitions_ = new TransitionControls(false, transitionSection_);
-	transitionSection_->addChild(transitions_);
-
 	clockSection_ = new Section(QStringLiteral("Clock"), theme::kAccentSky, controls);
 	clock_ = new ClockWidget(clockSection_);
 	clockSection_->addChild(clock_);
@@ -965,7 +960,6 @@ SidePanel::SidePanel(QWidget *parent) : QWidget(parent)
 	audioSection_->addChild(meter_, 1);
 	audioSection_->addChild(loudness_);
 
-	cl->addWidget(transitionSection_);
 	cl->addWidget(clockSection_);
 	cl->addWidget(streamSection_);
 	cl->addWidget(recordSection_);
@@ -1020,8 +1014,6 @@ void SidePanel::setCompact(bool compact)
 	compact_ = compact;
 	const qreal s = compact ? 0.84 : 1.0;
 	setFixedWidth(compact ? 184 : 236);
-	transitionSection_->setScale(s);
-	transitions_->setCompact(compact);
 	clockSection_->setScale(s);
 	clock_->setScale(s);
 	streamSection_->setScale(s);

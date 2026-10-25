@@ -46,7 +46,8 @@ public:
 	void openSettings(QWidget *parent = nullptr);
 	// Next to the side bar of the asking view (Settings ▸ embedded, the default), or
 	// in its own window.
-	void openMasterBus(QWidget *parent = nullptr);
+	// popUp: always its own window (the controls dock), whatever Settings says.
+	void openMasterBus(QWidget *parent = nullptr, bool popUp = false);
 	// action: Settings::ClickPreview or Settings::ClickProgram.
 	void switchScene(int sceneIndex, int action);
 	// A tile in a multiview was clicked (kind = TileKind as int).

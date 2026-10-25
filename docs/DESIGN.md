@@ -168,7 +168,17 @@ Dynamic once (`settings_version` < 2).
   2 s). Already fullscreen elsewhere → `showNormal()`, 0.9 s for the exit animation,
   then the same steps. Window-state changes on the way are ignored; Esc or choosing
   Window cancels.
-- **Transition controls (0.7.4)**: side bar section (top) and controls dock. CUT =
+- **Transition strip (0.8.0)**: in the Dynamic, ATEM and Classic layouts a column is
+  reserved between Preview and Program (`PlaceParams::centerStrip`,
+  `transitionStripWidth()` ≈ 4.5 % of the width, 52–84 px). `transitionStrip()` places
+  CUT, AUTO, a progress bar and the transition name / length in it; the renderer draws
+  them (rounded LiveVoice buttons from text_ft2 labels) and `ViewerDisplay` hit-tests
+  the same boxes (hover = pointer cursor + lighter button; double-clicks ignored).
+  AUTO lights red and the bar fills from `obs_transition_get_time()` while a
+  transition runs. Outside Studio Mode the strip is dimmed and inert. Settings ▸
+  `show_transitions` hides the strip (and the dock's controls); the side bar section
+  of 0.7.4 is gone. Big Program and the scene grids have no strip.
+- **Transition controls (0.7.4)**: controls dock (was also the side bar). CUT =
   OBS's built-in Cut transition for one take (set Cut → trigger → restore the chosen
   transition, all synchronous on the main thread); AUTO =
   `obs_frontend_preview_program_trigger_transition` with the current transition.
@@ -178,7 +188,9 @@ Dynamic once (`settings_version` < 2).
 - **Controls dock (0.7.2)**: Docks ▸ OBSViewer Controls — viewer state (closed /
   windowed / fullscreen + screen), Window · Fullscreen (toggle; arrow = screen menu) ·
   Close, the window layout, Bus ON/OFF with plugin count and gain reduction, Open Bus,
-  Settings. Polls App / MasterBus state every 0.4 s while visible.
+  Settings. Polls App / MasterBus state every 0.4 s while visible. Contents sit in a
+  scroll area so the dock's minimum size is tiny (0.8.0) — Qt won't dock a widget
+  into an area smaller than its minimum. Open Bus always opens the bus window.
 - **No toolbar**: layout and tile-click action live in Settings (and layout in the
   right-click menu). Right-click: Layout, Send to Preview / Cut to Program (or Switch
   Scene), window / fullscreen / screen actions, Master Bus…, Settings…, Close.
@@ -309,6 +321,7 @@ Stored as JSON in `~/Library/Application Support/obs-studio/plugin_config/obsvie
 | `master_bus_embedded` | `true` | Master bus opens next to the side bar (else in its own window). |
 | `safe_areas` | `false` | Safe-area guides on Program and Preview. |
 | `hide_obs_preview` | `true` | Turn OBS's own preview off while the viewer window is open. |
+| `show_transitions` | `true` | CUT / AUTO strip between Preview and Program, and in the controls dock. |
 | `warn_frozen` | `true` | Health warns when Program hasn't changed for 60 s while live. |
 | `show_clock` | `true` | Clock section in the side bar. |
 | `countdown_on` / `countdown_minutes` / `countdown_label` | off / 630 (10:30) / "Service starts" | Daily countdown. |

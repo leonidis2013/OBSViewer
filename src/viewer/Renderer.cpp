@@ -15,6 +15,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <tuple>
 
 namespace obsviewer {
 
@@ -186,6 +187,90 @@ void drawTitleBand(obs_source_t *title, obs_source_t *name, obs_source_t *refere
 	drawLabelText(name, m, band, fx + 8.0f, fw - 16.0f, false);
 }
 
+// Rounded rectangle (radius r) built from horizontal slices: the corners step
+// one device pixel at a time, which reads as round at these sizes.
+void drawRoundBox(float x, float y, float w, float h, float r, float px, uint32_t argb)
+{
+	r = std::min({r, w / 2.0f, h / 2.0f});
+	if (r < px * 1.5f) {
+		drawBox(x, y, w, h, argb);
+		return;
+	}
+	drawBox(x, y + r, w, h - 2.0f * r, argb);
+	for (float dy = 0.0f; dy < r; dy += px) {
+		const float yc = r - dy - px / 2.0f; // distance from the corner centre
+		const float inset = r - std::sqrt(std::max(0.0f, r * r - yc * yc));
+		drawBox(x + inset, y + dy, w - 2.0f * inset, px, argb);
+		drawBox(x + inset, y + h - dy - px, w - 2.0f * inset, px, argb);
+	}
+}
+
+// LiveVoice-style button: raised fill, 1-px border, 5-px corners, label centred.
+void drawButton(const Box &b, obs_source_t *label, obs_source_t *reference, float px, uint32_t fill,
+		uint32_t border, bool dim)
+{
+	drawRoundBox(b.x, b.y, b.w, b.h, 5.0f, px, border);
+	drawRoundBox(b.x + px, b.y + px, b.w - 2.0f * px, b.h - 2.0f * px, 5.0f - px, px, fill);
+	const Rect band{b.x, b.y, b.w, b.h};
+	LabelMetrics m = labelMetrics(reference, Rect{b.x, b.y, b.w, std::min(b.h, 30.0f)});
+	m.top = (b.h - m.refH * m.scale) / 2.0f;
+	drawLabelText(label, m, band, b.x + 4.0f, b.w - 8.0f, true);
+	if (dim)
+		drawRoundBox(b.x, b.y, b.w, b.h, 5.0f, px, 0xB00D1015u);
+}
+
+// The transition column between Preview and Program: CUT, AUTO (lit red while a
+// transition runs), a progress bar, and the transition's name and length.
+void drawTransitionStrip(const TransitionStrip &st, const ViewerState::Snapshot &snap, float px, int hover,
+			 int pressed)
+{
+	const bool live = snap.studioMode;
+	float t = snap.transition ? obs_transition_get_time(snap.transition) : 1.0f;
+	const bool running = live && t > 0.0f && t < 1.0f;
+
+	auto fillFor = [&](int id) -> uint32_t {
+		if (!live)
+			return theme::kPanelRaised;
+		if (pressed == id)
+			return theme::kBorder;
+		return hover == id ? 0xFF222933u : theme::kPanelRaised;
+	};
+	auto borderFor = [&](int id) -> uint32_t {
+		return live && (hover == id || pressed == id) ? theme::kTextFaint : theme::kBorder;
+	};
+
+	drawButton(st.cut, snap.cutLabel, snap.programLabel, px, fillFor(Renderer::kCut), borderFor(Renderer::kCut),
+		   !live);
+	if (running)
+		drawButton(st.autoTake, snap.autoLabel, snap.programLabel, px, theme::kBad, theme::kBad, false);
+	else
+		drawButton(st.autoTake, snap.autoLabel, snap.programLabel, px, fillFor(Renderer::kAuto),
+			   borderFor(Renderer::kAuto), !live);
+
+	if (st.progress.h > 0.0f) {
+		const Box &p = st.progress;
+		drawRoundBox(p.x, p.y, p.w, p.h, p.w / 2.0f, px, theme::kPanel);
+		if (running) {
+			const float fh = std::max(p.w, p.h * t);
+			drawRoundBox(p.x, p.y, p.w, fh, p.w / 2.0f, px, theme::kBad);
+		}
+	}
+
+	if (st.nameLine.h > 0.0f) {
+		for (const auto &[box, label, dimText] :
+		     {std::tuple{st.nameLine, snap.transitionNameLabel, false},
+		      std::tuple{st.timeLine, snap.transitionTimeLabel, true}}) {
+			const Rect band{box.x, box.y, box.w, box.h};
+			LabelMetrics m = labelMetrics(snap.programLabel, band);
+			m.scale = box.h * 0.62f / m.refH;
+			m.top = (box.h - m.refH * m.scale) / 2.0f;
+			drawLabelText(label, m, band, box.x, box.w, true);
+			if (dimText || !live)
+				drawBox(box.x, box.y, box.w, box.h, 0x800D1015u);
+		}
+	}
+}
+
 uint32_t levelColor(float db)
 {
 	if (db >= -3.0f)
@@ -322,7 +407,8 @@ void renderSceneHalfRate(RenderCache &cache, int sceneIndex, obs_source_t *sourc
 
 } // namespace
 
-void Renderer::render(const std::string &layoutId, uint32_t cx, uint32_t cy, float dpr, RenderCache &cache)
+void Renderer::render(const std::string &layoutId, uint32_t cx, uint32_t cy, float dpr, RenderCache &cache, int hover,
+		      int pressed)
 {
 	if (cx == 0 || cy == 0)
 		return;
@@ -342,6 +428,7 @@ void Renderer::render(const std::string &layoutId, uint32_t cx, uint32_t cy, flo
 	params.aspect = aspect;
 	params.labelHeight = snap.showLabels ? labelBandHeight(H) : 0.0f;
 	params.gap = 4.0f;
+	params.centerStrip = snap.showTransitions ? transitionStripWidth(layoutId, W) : 0.0f;
 	// Which scene each view shows (Settings / right-click ▸ This View Shows).
 	const std::string &resolvedId = layoutById(layoutId).id;
 	const std::vector<int> *viewMap = nullptr;
@@ -476,6 +563,12 @@ void Renderer::render(const std::string &layoutId, uint32_t cx, uint32_t cy, flo
 			if (previewFallback)
 				drawTileNote(snap.studioOffLabel, pic, pad, std::max(10.0f, pic.h * 0.08f));
 		}
+	}
+
+	if (snap.showTransitions) {
+		const TransitionStrip st = transitionStrip(tiles, params.gap);
+		if (st.valid)
+			drawTransitionStrip(st, snap, px, hover, pressed);
 	}
 
 	endRegion();

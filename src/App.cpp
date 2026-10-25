@@ -49,6 +49,7 @@ void App::init()
 	ViewerState::get().setShowLabels(Settings::get().showLabels);
 	ViewerState::get().setShowTileMeters(Settings::get().tileMeters);
 	ViewerState::get().setSafeAreas(Settings::get().safeAreas);
+	ViewerState::get().setShowTransitions(Settings::get().showTransitions);
 
 	auto *mainWindow = static_cast<QMainWindow *>(obs_frontend_get_main_window());
 
@@ -386,9 +387,9 @@ MultiviewPanel *App::masterBusHost(QWidget *from)
 	return viewer_ ? viewer_->panel() : nullptr;
 }
 
-void App::openMasterBus(QWidget *parent)
+void App::openMasterBus(QWidget *parent, bool popUp)
 {
-	if (Settings::get().masterBusEmbedded) {
+	if (!popUp && Settings::get().masterBusEmbedded) {
 		if (MultiviewPanel *host = masterBusHost(parent)) {
 			obs_log(LOG_INFO, "master bus: showing next to the side bar");
 			host->setMasterBusVisible(true);
@@ -469,6 +470,7 @@ void App::applySettings()
 	ViewerState::get().setShowLabels(s.showLabels);
 	ViewerState::get().setShowTileMeters(s.tileMeters);
 	ViewerState::get().setSafeAreas(s.safeAreas);
+	ViewerState::get().setShowTransitions(s.showTransitions);
 	ViewerState::get().updateViewScenes();
 	if (dock_) {
 		dock_->setLayoutId(s.dockLayout);

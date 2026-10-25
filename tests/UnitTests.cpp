@@ -171,6 +171,65 @@ static void testAutoLayout()
 	CHECK(tiles[0].picture.w > p.width * 0.35f);
 }
 
+static bool inside(const Box &in, const Box &out)
+{
+	return in.x >= out.x - 0.01f && in.y >= out.y - 0.01f && in.x + in.w <= out.x + out.w + 0.01f &&
+	       in.y + in.h <= out.y + out.h + 0.01f;
+}
+
+static void testTransitionStrip()
+{
+	const std::pair<float, float> sizes[] = {{1920, 1080}, {1600, 1000}, {800, 450}, {420, 260},
+						 {1000, 1400}, {2560, 900},  {300, 900}, {3000, 400}};
+	for (const LayoutInfo &l : allLayouts()) {
+		const bool hasPair = l.id == "auto" || l.id == "atem" || l.id == "classic8";
+		for (const auto &[w, h] : sizes) {
+			for (int n : {0, 3, 8, 20}) {
+				PlaceParams p;
+				p.width = w;
+				p.height = h;
+				p.labelHeight = labelBandHeight(h);
+				p.sceneCount = n;
+				p.centerStrip = transitionStripWidth(l.id, w);
+				CHECK((p.centerStrip > 0.0f) == hasPair);
+				const auto tiles = placeTiles(l.id, p);
+				checkPlacement(tiles, p);
+				const TransitionStrip st = transitionStrip(tiles, p.gap);
+				if (!hasPair) {
+					CHECK(!st.valid);
+					continue;
+				}
+				if (w >= 800 && h >= 450)
+					CHECK(st.valid);
+				if (!st.valid)
+					continue;
+				// between Preview and Program, touching no tile
+				for (const auto &t : tiles)
+					CHECK(!overlaps(st.area, t.cell));
+				CHECK(st.area.x > tiles[0].cell.x && st.area.x + st.area.w < tiles[1].cell.x + 0.01f);
+				for (const Box *b : {&st.cut, &st.autoTake, &st.progress, &st.nameLine, &st.timeLine})
+					if (b->h > 0.0f)
+						CHECK(inside(*b, st.area));
+				CHECK(st.cut.y + st.cut.h <= st.autoTake.y);
+				CHECK(!overlaps(st.cut, st.autoTake));
+				if (st.progress.h > 0.0f) {
+					CHECK(st.progress.y >= st.autoTake.y + st.autoTake.h);
+					if (st.nameLine.h > 0.0f)
+						CHECK(st.progress.y + st.progress.h <= st.nameLine.y);
+				}
+			}
+		}
+	}
+	// Strip off: Preview and Program are just a gap apart.
+	PlaceParams p;
+	p.width = 1600;
+	p.height = 900;
+	p.labelHeight = 20;
+	const auto plain = placeTiles("atem", p);
+	CHECK(std::fabs(plain[1].cell.x - (plain[0].cell.x + plain[0].cell.w) - p.gap) < 0.01f);
+	CHECK(!transitionStrip(plain, p.gap).valid);
+}
+
 static void testPictureHealth()
 {
 	HealthInputs in;
@@ -510,6 +569,7 @@ int main()
 {
 	testLayouts();
 	testAutoLayout();
+	testTransitionStrip();
 	testPictureHealth();
 	testVersions();
 	testSelection();

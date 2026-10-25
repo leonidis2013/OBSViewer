@@ -20,7 +20,6 @@ class NetworkStats;
 class StatLines;
 class LoudnessHistory;
 class ClockWidget;
-class TransitionControls;
 
 // Small square header button with a drawn icon (settings, fullscreen, close…).
 class IconButton : public QAbstractButton {
@@ -74,8 +73,6 @@ private:
 	HealthButton *health_ = nullptr;
 	HealthButton *perf_ = nullptr;
 	QStackedWidget *stack_ = nullptr;
-	Section *transitionSection_ = nullptr;
-	TransitionControls *transitions_ = nullptr;
 	Section *clockSection_ = nullptr;
 	ClockWidget *clock_ = nullptr;
 	Section *streamSection_ = nullptr;

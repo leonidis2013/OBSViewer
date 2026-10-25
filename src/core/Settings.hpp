@@ -23,6 +23,7 @@ struct Settings {
 	bool warnFrozen = true;        // health warns when Program hasn't changed for a minute while live
 	bool safeAreas = false;        // action-safe / title-safe guides on Program and Preview
 	bool hideObsPreview = true;    // turn OBS's own preview off while the viewer window is open
+	bool showTransitions = true;   // CUT / AUTO strip between Preview and Program (and in the controls dock)
 
 	// Clock and countdown in the side bar.
 	bool showClock = true;

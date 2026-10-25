@@ -43,17 +43,25 @@ protected:
 	void mousePressEvent(QMouseEvent *event) override;
 	void mouseDoubleClickEvent(QMouseEvent *event) override;
 	void contextMenuEvent(QContextMenuEvent *event) override;
+	void mouseMoveEvent(QMouseEvent *event) override;
+	void mouseReleaseEvent(QMouseEvent *event) override;
+	void leaveEvent(QEvent *event) override;
 
 private:
 	void createDisplay();
 	void destroyDisplay();
 	bool tileAt(const QPointF &pos, int &kind, int &sceneIndex, int &slot) const;
+	// Renderer::StripButton under pos (kNone if none, or the strip is hidden).
+	int stripButtonAt(const QPointF &pos) const;
+	void setHover(int button);
 	QSize pixelSize() const;
 	static void draw(void *param, uint32_t cx, uint32_t cy);
 
 	obs_display_t *display_ = nullptr;
 	std::atomic<const LayoutInfo *> layout_;
 	std::atomic<float> dpr_{1.0f};
+	std::atomic<int> hover_{0};   // transition button under the mouse
+	std::atomic<int> pressed_{0}; // transition button held down
 	RenderCache cache_; // graphics thread only
 	bool counted_ = false;
 };

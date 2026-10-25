@@ -39,6 +39,13 @@ public:
 		obs_source_t *programNameLabel = nullptr; // scene name only
 		obs_source_t *studioOffLabel = nullptr;
 		obs_source_t *mutedLabel = nullptr;
+		// Transition strip between Preview and Program.
+		obs_source_t *transition = nullptr;         // current transition (progress)
+		obs_source_t *cutLabel = nullptr;
+		obs_source_t *autoLabel = nullptr;
+		obs_source_t *transitionNameLabel = nullptr; // e.g. "Fade"
+		obs_source_t *transitionTimeLabel = nullptr; // e.g. "300 ms"
+		bool showTransitions = true;
 		std::vector<AudioList> sceneAudio; // parallel to scenes
 		AudioList previewAudio;
 		bool showTileMeters = true;
@@ -74,6 +81,7 @@ public:
 	// Re-reads Settings ▸ which scene each view shows.
 	void updateViewScenes();
 	void setSafeAreas(bool on);
+	void setShowTransitions(bool on);
 	// Scene index for each scene view of a layout (see Snapshot::viewMaps). Main thread.
 	std::vector<int> viewMap(const std::string &layoutId) const;
 	void setShowLabels(bool show);
@@ -99,6 +107,10 @@ private:
 		obs_source_t *programName = nullptr;
 		obs_source_t *studioOff = nullptr;
 		obs_source_t *muted = nullptr;
+		obs_source_t *cut = nullptr;
+		obs_source_t *autoTake = nullptr;
+		obs_source_t *transitionName = nullptr;
+		obs_source_t *transitionTime = nullptr;
 	};
 	struct RenderScene {
 		obs_weak_source_t *weak = nullptr;
@@ -118,7 +130,9 @@ private:
 	std::vector<RenderScene> renderScenes_;
 	obs_weak_source_t *program_ = nullptr;
 	obs_weak_source_t *preview_ = nullptr;
+	obs_weak_source_t *transition_ = nullptr;
 	Labels labels_;
+	bool showTransitions_ = true;
 	bool studioMode_ = false;
 	bool streaming_ = false;
 	bool recording_ = false;
@@ -135,6 +149,7 @@ private:
 	std::vector<obs_weak_source_t *> sceneWeak_;
 	std::string programName_;
 	std::string previewName_;
+	std::string transitionText_; // name + "\n" + time the labels were built for
 	bool haveProgramNames_ = false;
 	uint32_t labelHeight_ = 0; // canvas height the labels were built for
 	uint32_t baseWidthMain_ = 1920;

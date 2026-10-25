@@ -9,6 +9,8 @@ class QToolButton;
 
 namespace obsviewer {
 
+class TransitionControls;
+
 // "OBSViewer Controls" dock: a small remote for the viewer so nothing needs the
 // Tools menu — open as a window, fullscreen (pick the screen), close, choose the
 // layout, master bus on / off and open, Settings. Main thread.
@@ -28,6 +30,8 @@ private:
 	QPushButton *busPower_ = nullptr;
 	QPushButton *busOpen_ = nullptr;
 	QLabel *busStatus_ = nullptr;
+	QLabel *transitionCaption_ = nullptr;
+	TransitionControls *transitions_ = nullptr;
 	bool updating_ = false;
 };
 

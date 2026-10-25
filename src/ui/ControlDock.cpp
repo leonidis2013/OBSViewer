@@ -16,6 +16,7 @@
 #include <QLabel>
 #include <QMessageBox>
 #include <QPushButton>
+#include <QScrollArea>
 #include <QScreen>
 #include <QTimer>
 #include <QToolButton>
@@ -95,7 +96,7 @@ QPushButton#busPower:checked { background-color: #3ECF6E; border-color: #3ECF6E;
 	busPower_->setCheckable(true);
 	busPower_->setToolTip(QStringLiteral("Master bus on / off"));
 	busOpen_ = new QPushButton(QStringLiteral("Open Bus"), this);
-	busOpen_->setToolTip(QStringLiteral("Show the master bus strip"));
+	busOpen_->setToolTip(QStringLiteral("Open the master bus in its own window"));
 	busStatus_ = new QLabel(this);
 	busStatus_->setProperty("dim", true);
 	auto *busRow = new QHBoxLayout();
@@ -105,16 +106,33 @@ QPushButton#busPower:checked { background-color: #3ECF6E; border-color: #3ECF6E;
 
 	auto *settings = new QPushButton(QStringLiteral("Settings…"), this);
 
-	auto *layout = new QVBoxLayout(this);
+	// Contents scroll, so the dock has almost no minimum size and fits any OBS
+	// dock area (a tall minimum stops Qt from docking it in the short bottom row).
+	auto *content = new QWidget(this);
+	content->setObjectName(QStringLiteral("OBSViewerRoot"));
+	auto *scroll = new QScrollArea(this);
+	scroll->setFrameShape(QFrame::NoFrame);
+	scroll->setWidgetResizable(true);
+	scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+	scroll->setWidget(content);
+	auto *outer = new QVBoxLayout(this);
+	outer->setContentsMargins(0, 0, 0, 0);
+	outer->addWidget(scroll);
+	setMinimumSize(120, 60);
+
+	transitionCaption_ = caption(QStringLiteral("TRANSITION"), content);
+	transitions_ = new TransitionControls(false, content);
+
+	auto *layout = new QVBoxLayout(content);
 	layout->setContentsMargins(8, 8, 8, 8);
 	layout->setSpacing(6);
 	layout->addLayout(statusRow);
 	layout->addLayout(viewerRow);
-	layout->addWidget(caption(QStringLiteral("TRANSITION"), this));
-	layout->addWidget(new TransitionControls(false, this));
-	layout->addWidget(caption(QStringLiteral("LAYOUT"), this));
+	layout->addWidget(transitionCaption_);
+	layout->addWidget(transitions_);
+	layout->addWidget(caption(QStringLiteral("LAYOUT"), content));
 	layout->addWidget(layout_);
-	layout->addWidget(caption(QStringLiteral("MASTER BUS"), this));
+	layout->addWidget(caption(QStringLiteral("MASTER BUS"), content));
 	layout->addLayout(busRow);
 	layout->addWidget(busStatus_);
 	layout->addWidget(settings);
@@ -150,7 +168,7 @@ QPushButton#busPower:checked { background-color: #3ECF6E; border-color: #3ECF6E;
 			QMessageBox::warning(window(), QStringLiteral("Master bus"), QString::fromStdString(error));
 		refresh();
 	});
-	connect(busOpen_, &QPushButton::clicked, this, [] { later([] { App::get().openMasterBus(nullptr); }); });
+	connect(busOpen_, &QPushButton::clicked, this, [] { later([] { App::get().openMasterBus(nullptr, true); }); });
 	connect(settings, &QPushButton::clicked, this, [] { later([] { App::get().openSettings(); }); });
 
 	auto *timer = new QTimer(this);
@@ -187,6 +205,9 @@ void ControlDock::refresh()
 	window_->setChecked(open && !fullscreen);
 	fullscreen_->setChecked(fullscreen);
 	close_->setEnabled(open);
+	const bool showTransitions = Settings::get().showTransitions;
+	transitionCaption_->setVisible(showTransitions);
+	transitions_->setVisible(showTransitions);
 
 	const int li = layout_->findData(QString::fromStdString(layoutById(Settings::get().windowLayout).id));
 	if (li >= 0 && li != layout_->currentIndex())
