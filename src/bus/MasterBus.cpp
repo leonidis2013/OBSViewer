@@ -291,7 +291,8 @@ void MasterBus::start()
 		obs_log(LOG_WARNING, "master bus: could not create the bus source");
 		return;
 	}
-	obs_source_set_monitoring_type(source_, OBS_MONITORING_TYPE_NONE);
+	// New sources aren't monitored, so there's nothing to turn off (the old
+	// monitoring-type call is deprecated in OBS 33).
 	applyOutputMixers();
 	obs_set_output_source(kChannel, source_);
 

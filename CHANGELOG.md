@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.10.5] — 2026-10-31
+
+- **Ready for OBS 33.** Checked against OBS 33.0.1. Still built against OBS 32, so the same install works in OBS 32 and 33 (OBS refuses a plugin built for a newer version than itself).
+- **Fixed for OBS 33: Listen to Stream could slowly add delay to all audio.** OBS 33 replaced "Monitor Only" with a plain on/off, so the listening source's audio now also lands in OBS's mix buffers. It was stamped with the block OBS had just mixed, which OBS treats as late, so OBS kept adding audio buffering. It's now stamped for the next block, like the master bus, and monitoring is turned on with OBS 33's own call.
+- Removed a deprecated call from the master bus (it only turned off monitoring that was never on).
+
+
 ## [0.10.4] — 2026-10-25
 
 - **Removed the silence alarm.** Quiet moments (prayer, a pause between songs) set off the health light as a problem while live. With the routing diagram and Listen to Stream you can confirm the audio path directly, so the check is gone.

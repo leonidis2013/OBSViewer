@@ -133,6 +133,8 @@ target_sources(
     src/audio/meters/TpFilter.h
     src/audio/meters/TruePeakMeter.h
     src/core/Countdown.cpp
+    src/core/ObsCompat.cpp
+    src/core/ObsCompat.hpp
     src/core/YouTube.cpp
     src/core/YouTube.hpp
     src/stream/StreamTitle.cpp

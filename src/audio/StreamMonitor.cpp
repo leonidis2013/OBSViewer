@@ -1,8 +1,10 @@
 #include "audio/StreamMonitor.hpp"
 
+#include "core/ObsCompat.hpp"
 #include "metrics/Metrics.hpp"
 
 #include <plugin-support.h>
+#include <util/util_uint64.h>
 
 #include <algorithm>
 
@@ -87,7 +89,7 @@ void StreamMonitor::start(size_t track)
 		return;
 	}
 	obs_source_set_audio_mixers(source_, 0); // on no track: heard, never mixed
-	obs_source_set_monitoring_type(source_, OBS_MONITORING_TYPE_MONITOR_ONLY);
+	compat::enableMonitoring(source_);
 	obs_set_output_source(kChannel, source_);
 
 	track_ = std::min<size_t>(track, MAX_AUDIO_MIXES - 1);
@@ -126,7 +128,12 @@ void StreamMonitor::onMix(void *param, size_t, struct audio_data *data)
 	out.speakers = SPEAKERS_STEREO;
 	out.format = AUDIO_FORMAT_FLOAT_PLANAR;
 	out.samples_per_sec = self->sampleRate_;
-	out.timestamp = data->timestamp;
+	// Stamped for the next mix block, like the master bus: in OBS 33 a monitored
+	// source's audio also goes into OBS's mix buffers (on no track), and audio
+	// stamped with the block OBS just mixed counts as late, which makes OBS keep
+	// adding audio buffering (delay) to everything.
+	out.timestamp = data->timestamp +
+			util_mul_div64(data->frames, 1000000000ULL, self->sampleRate_ ? self->sampleRate_ : 48000);
 	obs_source_output_audio(src, &out); // copies the data
 }
 

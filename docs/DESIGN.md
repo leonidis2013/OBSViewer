@@ -489,6 +489,20 @@ Clicking a source toggles `setRouted`; clicking a track toggles it in the output
 Below it: All / None, bus input track, output checkboxes. Refreshed every 0.5 s from a
 signature of the routing state. Replaces the 0.6 Inputs popup.
 
+### 8.1c OBS 33 compatibility (0.10.5)
+
+Built against OBS 32.2.2: libobs rejects modules built for a newer major
+(`MODULE_INCOMPATIBLE_VER`), so a 33 build would not load on the church Mac's 32.
+All sources syntax-check clean against 33.0.1 headers. Differences handled at run
+time (`core/ObsCompat`): OBS 33 deprecates `obs_source_set_monitoring_type` for
+`obs_source_set_monitoring_enabled(bool)` (no Monitor Only). On 33 the stream monitor
+is turned on via `dlsym` of the new call; its audio then also enters the mix buffers
+(mixers 0, never heard on a track), so it is stamped +1 mix block like the bus, or
+OBS would treat it as late and keep adding buffering. Profile keys, private
+main-window slots (`EnablePreview`, `DisablePreview`, `EnablePreviewDisplay`),
+`broadcast_id` and the `~/Library/Application Support/obs-studio/plugins/*.plugin`
+location are unchanged in 33.
+
 ### 8.1a Listen to stream (0.8.2)
 
 `StreamMonitor`: raw audio callback on the stream track (final mix, bus included)
