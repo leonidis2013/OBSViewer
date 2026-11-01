@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.10.6] — 2026-11-01
+
+- **Clearer clock.** With a countdown set, the clock is now three labelled rows: **Starts in** (the countdown, big: green, amber in the last 2 minutes, red "+m:ss" once started, grey in days/hours when it's more than 12 hours away), the **service** with its day and time ("Today 10:30 AM", "Sun 10:30 AM"), and **Time now**.
+- **Preview is yellow.** The Preview view's tab and the outline and label tint of the scene in Preview are yellow instead of green, so Preview can't be mistaken for a "good" status. Program stays red.
+
+
 ## [0.10.5] — 2026-10-31
 
 - **Ready for OBS 33.** Checked against OBS 33.0.1. Still built against OBS 32, so the same install works in OBS 32 and 33 (OBS refuses a plugin built for a newer version than itself).

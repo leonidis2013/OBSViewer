@@ -496,7 +496,7 @@ void Renderer::render(const std::string &layoutId, uint32_t cx, uint32_t cy, flo
 			source = snap.preview;
 			label = snap.previewLabel;
 			previewFallback = !snap.studioMode;
-			tab = snap.studioMode ? theme::kGood : theme::kTextFaint;
+			tab = snap.studioMode ? theme::kPreview : theme::kTextFaint;
 			break;
 		case TileKind::Scene:
 			if (sceneIdx >= 0 && static_cast<size_t>(sceneIdx) < snap.scenes.size()) {
@@ -507,7 +507,7 @@ void Renderer::render(const std::string &layoutId, uint32_t cx, uint32_t cy, flo
 					bandFill = theme::kTallyProgram;
 					active = true;
 				} else if (source && snap.studioMode && source == snap.preview) {
-					edge = theme::kGood;
+					edge = theme::kPreview;
 					bandFill = theme::kTallyPreview;
 					active = true;
 				}

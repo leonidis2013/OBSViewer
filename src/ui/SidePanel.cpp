@@ -776,7 +776,7 @@ public:
 	void setScale(qreal scale)
 	{
 		scale_ = scale;
-		setFixedHeight(static_cast<int>(std::lround((countdownShown() ? 52 : 30) * scale)));
+		setFixedHeight(static_cast<int>(std::lround((countdownShown() ? 72 : 30) * scale)));
 		update();
 	}
 
@@ -796,50 +796,61 @@ protected:
 		const QRectF r = QRectF(rect());
 		const QTime now = QTime::currentTime();
 		const QString clockText = now.toString(QStringLiteral("h:mm:ss AP"));
-		const QRectF top(r.left(), r.top(), r.width(), 28 * s);
-		const QRectF line(r.left(), r.top() + 30 * s, r.width(), 18 * s);
-		auto bigClock = [&] { paint::text(p, top, clockText, col(theme::kText), paint::mono(21 * s, true)); };
-		if (!countdownShown()) {
-			bigClock();
-			return;
-		}
 
-		// The next start on a selected day; past it by up to an hour counts up.
+		// One labelled row per item: the label on the left, the value on the right.
+		auto row = [&](qreal y, qreal h, const QString &label, const QString &value, uint32_t valueColor,
+			       const QFont &valueFont) {
+			const QRectF rr(r.left(), r.top() + y * s, r.width(), h * s);
+			paint::text(p, rr, label, col(theme::kTextDim), paint::font(11 * s));
+			paint::text(p, rr, value, col(valueColor), valueFont, Qt::AlignRight | Qt::AlignVCenter);
+		};
+
 		const QDate today = QDate::currentDate();
-		const CountdownTarget target = nextCountdown(today.dayOfWeek(), now.msecsSinceStartOfDay() / 1000,
-							     st.countdownMinutes, st.countdownDays);
-		const QString label = QString::fromStdString(st.countdownLabel);
+		const CountdownTarget target =
+			countdownShown() ? nextCountdown(today.dayOfWeek(), now.msecsSinceStartOfDay() / 1000,
+							 st.countdownMinutes, st.countdownDays)
+					 : CountdownTarget{};
 		if (!target.found) {
-			bigClock();
-			return;
-		}
-		if (target.secondsTo > 12 * 3600) {
-			// Not soon: the time of day stays big, with when the next start is.
-			bigClock();
-			const QString time = QTime(0, 0).addSecs(st.countdownMinutes * 60).toString(QStringLiteral("h:mm AP"));
-			const QString when = target.dayOffset == 0   ? QStringLiteral("at %1").arg(time)
-					     : target.dayOffset == 1 ? QStringLiteral("tomorrow %1").arg(time)
-								     : QStringLiteral("%1 %2").arg(QLocale().dayName(
-										today.addDays(target.dayOffset).dayOfWeek(), QLocale::ShortFormat), time);
-			paint::text(p, line, QStringLiteral("%1 %2").arg(label, when), col(theme::kTextFaint), paint::font(11 * s));
+			// No countdown: just the time of day.
+			paint::text(p, QRectF(r.left(), r.top(), r.width(), 28 * s), clockText, col(theme::kText),
+				    paint::mono(21 * s, true));
 			return;
 		}
 
-		// Counting down: the countdown is big on top, the time of day small below.
-		const int signedDiff = static_cast<int>(target.secondsTo);
+		// 1. Countdown (big). More than 12 h away it's grey and in days / hours.
+		const long signedDiff = target.secondsTo;
 		const bool past = signedDiff < 0;
-		const int diff = std::abs(signedDiff);
-		const QString count = diff >= 3600 ? QStringLiteral("%1:%2:%3")
-								.arg(diff / 3600)
-								.arg((diff / 60) % 60, 2, 10, QLatin1Char('0'))
-								.arg(diff % 60, 2, 10, QLatin1Char('0'))
-						   : QStringLiteral("%1:%2").arg(diff / 60).arg(diff % 60, 2, 10, QLatin1Char('0'));
-		const uint32_t color = past ? theme::kBad : diff <= 120 ? theme::kWarn : theme::kGood;
-		paint::text(p, top, past ? QStringLiteral("+") + count : count, col(color), paint::mono(21 * s, true));
-		paint::text(p, line, past ? QStringLiteral("%1 · started").arg(label) : QStringLiteral("%1 in").arg(label),
-			    col(theme::kTextDim), paint::font(11 * s));
-		paint::text(p, line, clockText, col(theme::kTextDim), paint::mono(12 * s, true),
-			    Qt::AlignRight | Qt::AlignVCenter);
+		const long diff = std::labs(signedDiff);
+		QString count;
+		if (diff >= 24 * 3600)
+			count = QStringLiteral("%1d %2h").arg(diff / 86400).arg((diff / 3600) % 24);
+		else if (diff >= 3600)
+			count = QStringLiteral("%1:%2:%3")
+					.arg(diff / 3600)
+					.arg((diff / 60) % 60, 2, 10, QLatin1Char('0'))
+					.arg(diff % 60, 2, 10, QLatin1Char('0'));
+		else
+			count = QStringLiteral("%1:%2").arg(diff / 60).arg(diff % 60, 2, 10, QLatin1Char('0'));
+		const uint32_t countColor = past ? theme::kBad
+					   : diff > 12 * 3600 ? theme::kTextDim
+					   : diff <= 120 ? theme::kWarn
+							 : theme::kGood;
+		row(0, 30, past ? QStringLiteral("Started") : QStringLiteral("Starts in"),
+		    past ? QStringLiteral("+") + count : count, countColor, paint::mono(21 * s, true));
+
+		// 2. When the service is.
+		const QString time = QTime(0, 0).addSecs(st.countdownMinutes * 60).toString(QStringLiteral("h:mm AP"));
+		const QString day = target.dayOffset == 0   ? QStringLiteral("Today")
+				    : target.dayOffset == 1 ? QStringLiteral("Tomorrow")
+				    : target.dayOffset == -1 ? QStringLiteral("Yesterday")
+							     : QLocale().dayName(today.addDays(target.dayOffset).dayOfWeek(),
+										 QLocale::ShortFormat);
+		const QString label = QString::fromStdString(st.countdownLabel);
+		row(32, 18, label.isEmpty() ? QStringLiteral("Service") : label, QStringLiteral("%1 %2").arg(day, time),
+		    theme::kText, paint::font(11.5 * s, true));
+
+		// 3. The time now.
+		row(52, 18, QStringLiteral("Time now"), clockText, theme::kText, paint::mono(12 * s, true));
 	}
 
 private:

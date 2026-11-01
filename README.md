@@ -38,7 +38,7 @@ To uninstall, quit OBS and delete
 - **Switching scenes:** off by default. Turn it on in Settings ▸ Clicking a view: a
   click then sends a scene to Preview (or cuts it to Program). Double-click Preview to
   take it to Program.
-- **Tally:** a red name band = on Program, green = in Preview (Studio Mode).
+- **Tally:** a red name band = on Program, yellow = in Preview (Studio Mode).
 - **Scene per view:** right-click a scene view ▸ This View Shows to pick its scene; in
   Dynamic, right-click ▸ Hide a scene.
 - **Hotkeys:** OBS ▸ Settings ▸ Hotkeys ▸ "OBSViewer: …" (also from a Stream Deck).

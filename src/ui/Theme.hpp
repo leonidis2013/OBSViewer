@@ -34,7 +34,9 @@ constexpr uint32_t kBlack = 0xFF000000;
 constexpr uint32_t kLabelPlate = 0xCC0D1015; // translucent bg behind notes on a picture
 // Label band tints for scenes that are on Program / in Preview.
 constexpr uint32_t kTallyProgram = 0xFFB53434;
-constexpr uint32_t kTallyPreview = 0xFF207A45;
+constexpr uint32_t kTallyPreview = 0xFF8A6A12; // dark amber (Preview is yellow)
+// Preview tally colour: yellow, so it can't be mistaken for a "good" status green.
+constexpr uint32_t kPreview = 0xFFF2C94C;
 
 // Qt style sheet for OBSViewer's own widgets (dock, windows, dialogs).
 QString styleSheet();

@@ -116,8 +116,8 @@ tests/                      host-side unit tests (layouts, versions) run in CI
   fixed canvas), with a 4-px gap. Each tile is the picture at the canvas aspect ratio
   plus a **label band just below it** (height = 2.8 % of the view, 14–26 px).
 - Label band: panel colour with the name centred; a 3 × 12 accent tab on the left
-  (red Program, green Preview, grey Preview when Studio Mode is off). A scene that is
-  on Program gets a red band and a 2-px red frame; in Preview a green band and frame.
+  (red Program, yellow Preview (0.10.6; was green), grey Preview when Studio Mode is off). A scene that is
+  on Program gets a red band and a 2-px red frame; in Preview a dark-amber band and a yellow frame.
   Program and Preview tiles have no frame. Other tiles have a 1-device-pixel border.
 - Scene tiles are numbered ("1   Interview"), centred. Program / Preview bands (0.6.2):
   accent tab, fixed title PROGRAM / PREVIEW (both reserve the wider title's width, so
@@ -282,11 +282,12 @@ only for a Problem.
   < 0.0008 as still. Health "Picture": black ≥ 3 s warning, ≥ 5 s while streaming or
   recording problem; unchanged ≥ 60 s while live warning (Settings can turn the
   frozen warning off).
-- **Clock:** side bar section with the time of day; optional countdown to a set time
-  on chosen days (0.8.1) with a label ("Service starts in 4:12", amber in the last 2
-  minutes, then "+m:ss started" for an hour). More than 12 h before, it shows when
-  the next start is ("Service starts Sun 10:30 AM"). `nextCountdown()`
-  (core/Countdown) finds the target, across midnight too; unit-tested.
+- **Clock:** side bar section. No countdown: the time of day, big. With a countdown
+  (days ticked, 0.8.1): three labelled rows (0.10.6) — **Starts in** (big; green,
+  amber ≤ 2 min, red "+m:ss" for an hour after the start, grey "Xd Yh" / h:mm:ss when
+  more than 12 h away), the countdown label with day and time ("Service starts ·
+  Today 10:30 AM"), and **Time now**. `nextCountdown()` (core/Countdown) finds the
+  target, across midnight too; unit-tested.
 - **Scene per view:** right-click a scene view ▸ This View Shows ▸ Automatic or any
   scene (per fixed layout, by scene name). Dynamic: right-click ▸ Hide “scene”;
   Hidden Scenes ▸ Show / Show All. Renderer, clicks and the "showing" marks all use
