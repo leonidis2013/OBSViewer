@@ -57,7 +57,8 @@ public:
 		bool recording = false;
 		bool recordingPaused = false;
 		bool showLabels = true;
-		bool safeAreas = false;
+		bool safeAreasPreview = false;
+		bool safeAreasProgram = false;
 		// Layout id → scene index for each scene view (-1 = empty view). For the
 		// Dynamic layout: the scenes it shows, in order.
 		std::shared_ptr<const std::map<std::string, std::vector<int>>> viewMaps;
@@ -83,7 +84,7 @@ public:
 	void removeView(const void *view);
 	// Re-reads Settings ▸ which scene each view shows.
 	void updateViewScenes();
-	void setSafeAreas(bool on);
+	void setSafeAreas(bool preview, bool program);
 	void setShowTransitions(bool on);
 	// YouTube stream title for the banner ("" = no banner). Main thread.
 	void setStreamTitle(const std::string &title);
@@ -167,7 +168,8 @@ private:
 	std::vector<int> shownScenes_; // scene indices currently marked showing
 	std::shared_ptr<const std::map<std::string, std::vector<int>>> viewMaps_; // guarded by mutex_
 	std::map<std::string, std::vector<int>> viewMapsMain_;                     // main-thread copy
-	bool safeAreas_ = false;
+	bool safeAreasPreview_ = false;
+	bool safeAreasProgram_ = false;
 	std::vector<obs_weak_source_t *> watched_; // scenes whose item signals we listen to
 	std::atomic<bool> audioDirty_{true};
 	int pollsSinceAudio_ = 0;

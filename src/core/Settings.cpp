@@ -58,7 +58,10 @@ void Settings::load()
 	showSidebar = getBool(data, "show_sidebar", defaults.showSidebar);
 	masterBusEmbedded = getBool(data, "master_bus_embedded", defaults.masterBusEmbedded);
 	warnFrozen = getBool(data, "warn_frozen", defaults.warnFrozen);
-	safeAreas = getBool(data, "safe_areas", defaults.safeAreas);
+	// One setting for both until 0.10.8: it seeds each view's own setting.
+	const bool legacySafe = getBool(data, "safe_areas", false);
+	safeAreasPreview = getBool(data, "safe_areas_preview", legacySafe);
+	safeAreasProgram = getBool(data, "safe_areas_program", legacySafe);
 	hideObsPreview = getBool(data, "hide_obs_preview", defaults.hideObsPreview);
 	showTransitions = getBool(data, "show_transitions", defaults.showTransitions);
 	showStreamTitle = getBool(data, "show_stream_title", defaults.showStreamTitle);
@@ -154,7 +157,9 @@ void Settings::save() const
 	obs_data_set_bool(data, "show_sidebar", showSidebar);
 	obs_data_set_bool(data, "master_bus_embedded", masterBusEmbedded);
 	obs_data_set_bool(data, "warn_frozen", warnFrozen);
-	obs_data_set_bool(data, "safe_areas", safeAreas);
+	obs_data_set_bool(data, "safe_areas_preview", safeAreasPreview);
+	obs_data_set_bool(data, "safe_areas_program", safeAreasProgram);
+	obs_data_erase(data, "safe_areas");
 	obs_data_set_bool(data, "show_transitions", showTransitions);
 	obs_data_set_bool(data, "show_stream_title", showStreamTitle);
 	obs_data_set_string(data, "youtube_channel", youtubeChannel.c_str());

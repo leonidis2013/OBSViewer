@@ -232,10 +232,11 @@ void ViewerState::updateViewScenes()
 		applyShowing(wanted);
 }
 
-void ViewerState::setSafeAreas(bool on)
+void ViewerState::setSafeAreas(bool preview, bool program)
 {
 	std::lock_guard<std::mutex> lock(mutex_);
-	safeAreas_ = on;
+	safeAreasPreview_ = preview;
+	safeAreasProgram_ = program;
 }
 
 void ViewerState::setStreamTitle(const std::string &title)
@@ -629,7 +630,8 @@ ViewerState::Snapshot ViewerState::acquire()
 	snap.recording = recording_;
 	snap.recordingPaused = recordingPaused_;
 	snap.showLabels = showLabels_;
-	snap.safeAreas = safeAreas_;
+	snap.safeAreasPreview = safeAreasPreview_;
+	snap.safeAreasProgram = safeAreasProgram_;
 	snap.viewMaps = viewMaps_;
 	snap.baseWidth = baseWidth_;
 	snap.baseHeight = baseHeight_;

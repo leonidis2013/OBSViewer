@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.10.8] — 2026-11-05
+
+- **Safe-area guides per view.** Settings ▸ Multiview ▸ Safe-area guides now has separate **Preview** and **Program** checkboxes. If you had the old single option on, both start ticked.
+
+
 ## [0.10.7] — 2026-11-04
 
 - **Controls dock fits OBS's bottom row.** Docked somewhere wide and short (next to Scenes, Sources and Controls), the OBSViewer Controls dock lays itself out as one row: status, **Window · Fullscreen ▾ · Close**, CUT / AUTO, layout, bus on/off and Settings. In a side dock area it stays a column. It still scrolls if the space is very small.

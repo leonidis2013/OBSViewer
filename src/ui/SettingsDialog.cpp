@@ -88,8 +88,18 @@ SettingsDialog::SettingsDialog(QWidget *parent) : QDialog(parent)
 	viewForm->addRow(QString(), showTransitions_);
 	busEmbedded_ = new QCheckBox(tr("Open the master bus next to the side bar (instead of its own window)"), viewGroup);
 	viewForm->addRow(QString(), busEmbedded_);
-	safeAreas_ = new QCheckBox(tr("Show safe-area guides on Program and Preview"), viewGroup);
-	viewForm->addRow(QString(), safeAreas_);
+	safeAreasPreview_ = new QCheckBox(tr("Preview"), viewGroup);
+	safeAreasProgram_ = new QCheckBox(tr("Program"), viewGroup);
+	for (QCheckBox *c : {safeAreasPreview_, safeAreasProgram_})
+		c->setToolTip(tr("Action-safe (93 %) and title-safe (90 %) outlines, and a centre mark"));
+	auto *safeRow = new QWidget(viewGroup);
+	auto *safeLayout = new QHBoxLayout(safeRow);
+	safeLayout->setContentsMargins(0, 0, 0, 0);
+	safeLayout->setSpacing(14);
+	safeLayout->addWidget(safeAreasPreview_);
+	safeLayout->addWidget(safeAreasProgram_);
+	safeLayout->addStretch(1);
+	viewForm->addRow(tr("Safe-area guides"), safeRow);
 	hideObsPreview_ = new QCheckBox(tr("Turn off OBS's own preview while the OBSViewer window is open"), viewGroup);
 	hideObsPreview_->setToolTip(tr("Saves graphics power: the picture isn't drawn twice. It comes back when the window "
 				       "closes. In Studio Mode OBS's Program view stays on."));
@@ -296,7 +306,8 @@ void SettingsDialog::load()
 	showSidebar_->setChecked(s.showSidebar);
 	alarms_->setChecked(s.alarms);
 	busEmbedded_->setChecked(s.masterBusEmbedded);
-	safeAreas_->setChecked(s.safeAreas);
+	safeAreasPreview_->setChecked(s.safeAreasPreview);
+	safeAreasProgram_->setChecked(s.safeAreasProgram);
 	showTransitions_->setChecked(s.showTransitions);
 	showStreamTitle_->setChecked(s.showStreamTitle);
 	youtubeChannel_->setText(QString::fromStdString(s.youtubeChannel));
@@ -341,7 +352,8 @@ void SettingsDialog::apply()
 	s.showSidebar = showSidebar_->isChecked();
 	s.alarms = alarms_->isChecked();
 	s.masterBusEmbedded = busEmbedded_->isChecked();
-	s.safeAreas = safeAreas_->isChecked();
+	s.safeAreasPreview = safeAreasPreview_->isChecked();
+	s.safeAreasProgram = safeAreasProgram_->isChecked();
 	s.showTransitions = showTransitions_->isChecked();
 	s.showStreamTitle = showStreamTitle_->isChecked();
 	const std::string channel = youtubeChannel_->text().trimmed().toStdString();

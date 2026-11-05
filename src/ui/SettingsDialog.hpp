@@ -30,7 +30,8 @@ private:
 	QCheckBox *showSidebar_ = nullptr;
 	QCheckBox *alarms_ = nullptr;
 	QCheckBox *busEmbedded_ = nullptr;
-	QCheckBox *safeAreas_ = nullptr;
+	QCheckBox *safeAreasPreview_ = nullptr;
+	QCheckBox *safeAreasProgram_ = nullptr;
 	QCheckBox *showTransitions_ = nullptr;
 	QCheckBox *showStreamTitle_ = nullptr;
 	QLineEdit *youtubeChannel_ = nullptr;

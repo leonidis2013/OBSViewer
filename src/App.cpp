@@ -50,7 +50,7 @@ void App::init()
 	Settings::get().load();
 	ViewerState::get().setShowLabels(Settings::get().showLabels);
 	ViewerState::get().setShowTileMeters(Settings::get().tileMeters);
-	ViewerState::get().setSafeAreas(Settings::get().safeAreas);
+	ViewerState::get().setSafeAreas(Settings::get().safeAreasPreview, Settings::get().safeAreasProgram);
 	ViewerState::get().setShowTransitions(Settings::get().showTransitions);
 
 	auto *mainWindow = static_cast<QMainWindow *>(obs_frontend_get_main_window());
@@ -478,7 +478,7 @@ void App::applySettings()
 	const Settings &s = Settings::get();
 	ViewerState::get().setShowLabels(s.showLabels);
 	ViewerState::get().setShowTileMeters(s.tileMeters);
-	ViewerState::get().setSafeAreas(s.safeAreas);
+	ViewerState::get().setSafeAreas(s.safeAreasPreview, s.safeAreasProgram);
 	ViewerState::get().setShowTransitions(s.showTransitions);
 	ViewerState::get().updateViewScenes();
 	if (dock_) {

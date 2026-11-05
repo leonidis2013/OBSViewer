@@ -530,7 +530,8 @@ void Renderer::render(const std::string &layoutId, uint32_t cx, uint32_t cy, flo
 
 		// Safe-area guides on Program and Preview: action safe 93 %, title safe 90 %,
 		// and a small centre mark.
-		if (snap.safeAreas && tile.kind != TileKind::Scene) {
+		if ((tile.kind == TileKind::Preview && snap.safeAreasPreview) ||
+		    (tile.kind == TileKind::Program && snap.safeAreasProgram)) {
 			for (float frac : {0.93f, 0.90f}) {
 				const float dx = pic.w * (1.0f - frac) / 2.0f, dy = pic.h * (1.0f - frac) / 2.0f;
 				drawFrame(Rect{pic.x + dx, pic.y + dy, pic.w - 2 * dx, pic.h - 2 * dy}, px,

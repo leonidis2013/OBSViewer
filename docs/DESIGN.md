@@ -328,7 +328,7 @@ Stored as JSON in `~/Library/Application Support/obs-studio/plugin_config/obsvie
 | `show_sidebar` | `true` | Right-hand side bar. |
 | `alarms` | `true` | Flash the health light on a Problem. |
 | `master_bus_embedded` | `true` | Master bus opens next to the side bar (else in its own window). |
-| `safe_areas` | `false` | Safe-area guides on Program and Preview. |
+| `safe_areas_preview` / `safe_areas_program` | `false` / `false` | Safe-area guides (93 % action, 90 % title, centre mark) on each view (0.10.8; the old `safe_areas` seeds both). |
 | `hide_obs_preview` | `true` | Turn OBS's own preview off while the viewer window is open. |
 | `show_transitions` | `true` | CUT / AUTO strip between Preview and Program, and in the controls dock. |
 | `warn_frozen` | `true` | Health warns when Program hasn't changed for 60 s while live. |
