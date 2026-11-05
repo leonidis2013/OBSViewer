@@ -191,6 +191,9 @@ Dynamic once (`settings_version` < 2).
   Settings. Polls App / MasterBus state every 0.4 s while visible. Contents sit in a
   scroll area so the dock's minimum size is tiny (0.8.0) — Qt won't dock a widget
   into an area smaller than its minimum. Open Bus always opens the bus window.
+  Responsive (0.10.7): when the dock is at least twice as wide as tall and under
+  220 px high, its groups go in one row (`QBoxLayout::LeftToRight`), captions and
+  the bus status line hide, and the transition controls go compact.
 - **No toolbar**: layout and tile-click action live in Settings (and layout in the
   right-click menu). Right-click: Layout, Send to Preview / Cut to Program (or Switch
   Scene), window / fullscreen / screen actions, Master Bus…, Settings…, Close.

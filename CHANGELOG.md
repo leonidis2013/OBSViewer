@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.10.7] — 2026-11-04
+
+- **Controls dock fits OBS's bottom row.** Docked somewhere wide and short (next to Scenes, Sources and Controls), the OBSViewer Controls dock lays itself out as one row: status, **Window · Fullscreen ▾ · Close**, CUT / AUTO, layout, bus on/off and Settings. In a side dock area it stays a column. It still scrolls if the space is very small.
+
+
 ## [0.10.6] — 2026-11-01
 
 - **Clearer clock.** With a countdown set, the clock is now three labelled rows: **Starts in** (the countdown, big: green, amber in the last 2 minutes, red "+m:ss" once started, grey in days/hours when it's more than 12 hours away), the **service** with its day and time ("Today 10:30 AM", "Sun 10:30 AM"), and **Time now**.

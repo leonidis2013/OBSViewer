@@ -2,6 +2,7 @@
 
 #include <QWidget>
 
+class QBoxLayout;
 class QComboBox;
 class QLabel;
 class QPushButton;
@@ -18,8 +19,12 @@ class ControlDock : public QWidget {
 public:
 	explicit ControlDock(QWidget *parent = nullptr);
 
+protected:
+	void resizeEvent(QResizeEvent *event) override;
+
 private:
 	void refresh();
+	void applyShape(); // one row in a wide, short dock area; a column otherwise
 
 	QLabel *dot_ = nullptr;
 	QLabel *status_ = nullptr;
@@ -33,6 +38,16 @@ private:
 	QLabel *busStatus_ = nullptr;
 	QLabel *transitionCaption_ = nullptr;
 	TransitionControls *transitions_ = nullptr;
+	QLabel *layoutCaption_ = nullptr;
+	QLabel *busCaption_ = nullptr;
+	QWidget *statusGroup_ = nullptr;
+	QWidget *viewerGroup_ = nullptr;
+	QWidget *transitionGroup_ = nullptr;
+	QWidget *layoutGroup_ = nullptr;
+	QWidget *busGroup_ = nullptr;
+	QPushButton *settings_ = nullptr;
+	QBoxLayout *main_ = nullptr;
+	bool strip_ = false;
 	bool updating_ = false;
 };
 

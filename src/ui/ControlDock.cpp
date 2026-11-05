@@ -19,6 +19,7 @@
 #include <QLabel>
 #include <QMessageBox>
 #include <QPushButton>
+#include <QResizeEvent>
 #include <QScrollArea>
 #include <QScreen>
 #include <QTimer>
@@ -132,21 +133,52 @@ QPushButton#busPower:checked { background-color: #3ECF6E; border-color: #3ECF6E;
 	transitionCaption_ = caption(QStringLiteral("TRANSITION"), content);
 	transitions_ = new TransitionControls(false, content);
 
-	auto *layout = new QVBoxLayout(content);
-	layout->setContentsMargins(8, 8, 8, 8);
-	layout->setSpacing(6);
-	layout->addLayout(statusRow);
-	layout->addWidget(streamTitle_);
-	layout->addLayout(viewerRow);
-	layout->addWidget(transitionCaption_);
-	layout->addWidget(transitions_);
-	layout->addWidget(caption(QStringLiteral("LAYOUT"), content));
-	layout->addWidget(layout_);
-	layout->addWidget(caption(QStringLiteral("MASTER BUS"), content));
-	layout->addLayout(busRow);
-	layout->addWidget(busStatus_);
-	layout->addWidget(settings);
-	layout->addStretch(1);
+	// Groups, so the dock can lay itself out as a column (side dock areas) or as
+	// one row of buttons (OBS's short bottom row, next to Scenes / Sources).
+	auto group = [content](QLayout *inner) {
+		auto *w = new QWidget(content);
+		auto *l = new QVBoxLayout(w);
+		l->setContentsMargins(0, 0, 0, 0);
+		l->setSpacing(4);
+		l->addLayout(inner);
+		return w;
+	};
+	auto *statusLayout = new QVBoxLayout();
+	statusLayout->setSpacing(4);
+	statusLayout->addLayout(statusRow);
+	statusLayout->addWidget(streamTitle_);
+	statusGroup_ = group(statusLayout);
+
+	viewerGroup_ = group(viewerRow);
+
+	auto *transitionLayout = new QVBoxLayout();
+	transitionLayout->setSpacing(4);
+	transitionLayout->addWidget(transitionCaption_);
+	transitionLayout->addWidget(transitions_);
+	transitionGroup_ = group(transitionLayout);
+
+	layoutCaption_ = caption(QStringLiteral("LAYOUT"), content);
+	auto *layoutLayout = new QVBoxLayout();
+	layoutLayout->setSpacing(4);
+	layoutLayout->addWidget(layoutCaption_);
+	layoutLayout->addWidget(layout_);
+	layoutGroup_ = group(layoutLayout);
+
+	busCaption_ = caption(QStringLiteral("MASTER BUS"), content);
+	auto *busLayout = new QVBoxLayout();
+	busLayout->setSpacing(4);
+	busLayout->addWidget(busCaption_);
+	busLayout->addLayout(busRow);
+	busLayout->addWidget(busStatus_);
+	busGroup_ = group(busLayout);
+
+	settings_ = settings;
+	main_ = new QBoxLayout(QBoxLayout::TopToBottom, content);
+	main_->setContentsMargins(8, 8, 8, 8);
+	main_->setSpacing(6);
+	for (QWidget *w : {statusGroup_, viewerGroup_, transitionGroup_, layoutGroup_, busGroup_, static_cast<QWidget *>(settings_)})
+		main_->addWidget(w);
+	main_->addStretch(1);
 
 	// ---- behaviour ----
 	connect(window_, &QPushButton::clicked, this, [this] {
@@ -223,9 +255,7 @@ void ControlDock::refresh()
 	window_->setChecked(open && !fullscreen);
 	fullscreen_->setChecked(fullscreen);
 	close_->setEnabled(open);
-	const bool showTransitions = Settings::get().showTransitions;
-	transitionCaption_->setVisible(showTransitions);
-	transitions_->setVisible(showTransitions);
+	transitionGroup_->setVisible(Settings::get().showTransitions);
 
 	const int li = layout_->findData(QString::fromStdString(layoutById(Settings::get().windowLayout).id));
 	if (li >= 0 && li != layout_->currentIndex())
@@ -247,6 +277,30 @@ void ControlDock::refresh()
 							    : QStringLiteral("no reduction")));
 	}
 	updating_ = false;
+}
+
+void ControlDock::resizeEvent(QResizeEvent *event)
+{
+	QWidget::resizeEvent(event);
+	applyShape();
+}
+
+void ControlDock::applyShape()
+{
+	// Wide and short (OBS's bottom dock row): everything on one row, captions and
+	// the bus status line hidden. Otherwise a column.
+	const bool strip = width() >= 2 * height() && height() < 220;
+	if (strip == strip_ && main_->direction() == (strip ? QBoxLayout::LeftToRight : QBoxLayout::TopToBottom))
+		return;
+	strip_ = strip;
+	main_->setDirection(strip ? QBoxLayout::LeftToRight : QBoxLayout::TopToBottom);
+	main_->setSpacing(strip ? 12 : 6);
+	for (QLabel *c : {transitionCaption_, layoutCaption_, busCaption_})
+		c->setVisible(!strip);
+	busStatus_->setVisible(!strip);
+	transitions_->setCompact(strip);
+	statusGroup_->setMinimumWidth(strip ? 150 : 0);
+	viewerGroup_->setMinimumWidth(strip ? 260 : 0);
 }
 
 } // namespace obsviewer
